@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>福祉用具購入費支給申請書 自動入力</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@400;700&display=swap');
+:root{
+  --bg:#f0ede8;--surface:#fff;--border:#d0c8bc;--border-light:#e8e3dc;
+  --accent:#1c4e8a;--accent2:#2563be;--accent-light:#e8eef8;--accent-dark:#132f5c;
+  --text:#1a1a1a;--muted:#6b6560;--label:#3d3530;
+  --success:#15803d;--error:#b91c1c;--sec-bg:#f8f5f0;
+  --tag-bg:#f0f4fc;--tag-border:#c5d4f0;--tag-on:#1c4e8a;--tag-on-bg:#dbeafe;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+header{background:linear-gradient(135deg,#1c4e8a,#0f3060);color:#fff;padding:16px 28px;position:sticky;top:0;z-index:100;box-shadow:0 2px 16px rgba(15,48,96,.35);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.hl{display:flex;align-items:center;gap:14px;}
+.hi{width:40px;height:40px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;}
+header h1{font-family:'Noto Serif JP',serif;font-size:16px;font-weight:700;letter-spacing:.04em;line-height:1.4;}
+header p{font-size:11px;opacity:.72;margin-top:3px;}
+.hb{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);border-radius:6px;padding:7px 16px;font-size:12px;white-space:nowrap;}
+.container{max-width:920px;margin:0 auto;padding:24px 20px 100px;}
+.sec{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:18px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.sh{background:var(--sec-bg);border-bottom:1px solid var(--border);padding:13px 20px;display:flex;align-items:center;gap:10px;}
+.si{width:30px;height:30px;background:var(--accent);color:#fff;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.st{font-family:'Noto Serif JP',serif;font-size:14px;font-weight:700;color:var(--label);letter-spacing:.03em;}
+.sb{padding:20px;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.f{display:flex;flex-direction:column;gap:5px;}
+.f.s2{grid-column:span 2;}
+label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.06em;}
+.req{color:var(--error);margin-left:2px;}
+input,textarea,select{font-family:'Noto Sans JP',sans-serif;font-size:14px;color:var(--text);background:#fff;border:1px solid var(--border);border-radius:7px;padding:9px 12px;transition:border-color .15s,box-shadow .15s;outline:none;width:100%;}
+input:focus,textarea:focus,select:focus{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(37,99,190,.12);}
+textarea{resize:vertical;min-height:68px;line-height:1.6;}
+.dr{display:flex;gap:6px;align-items:center;}
+.dr input{text-align:center;flex-shrink:0;}
+.dr input.yr{width:78px;}
+.dr input.mo,.dr input.dy{width:46px;padding:9px 4px;}
+.dr input.mo::-webkit-inner-spin-button,.dr input.dy::-webkit-inner-spin-button,
+.dr input.mo::-webkit-outer-spin-button,.dr input.dy::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+.dr input.mo,.dr input.dy{-moz-appearance:textfield;}
+.dr span{font-size:14px;color:var(--muted);flex-shrink:0;font-weight:500;}
+.spin-wrap{display:inline-flex;align-items:stretch;flex-shrink:0;}
+.spin-wrap input{border-top-right-radius:0;border-bottom-right-radius:0;}
+.spin-btns{display:flex;flex-direction:column;flex-shrink:0;}
+.spin-btns button{width:18px;height:14px;border:1px solid var(--border);border-left:none;background:#f7f7f9;font-size:8px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;color:var(--muted);}
+.spin-btns button:first-child{border-radius:0 6px 0 0;margin-bottom:-1px;}
+.spin-btns button:last-child{border-radius:0 0 6px 0;}
+.spin-btns button:hover{background:var(--accent-light);color:var(--accent);}
+
+/* Item block */
+.ib{border:1px solid var(--border-light);border-radius:10px;overflow:hidden;margin-bottom:14px;}
+.ib:last-child{margin-bottom:0;}
+.ih{background:var(--accent-light);padding:10px 16px;font-size:13px;font-weight:700;color:var(--accent-dark);display:flex;align-items:center;gap:8px;}
+.in{background:var(--accent);color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
+.ibody{padding:16px;}
+
+/* Preset picker */
+.preset-section{margin-bottom:14px;padding:14px;background:#f5f7fc;border:1px solid var(--border-light);border-radius:9px;}
+.preset-label{font-size:11px;font-weight:700;color:var(--accent-dark);letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.preset-cards{display:flex;flex-wrap:wrap;gap:8px;}
+.pcard{display:flex;flex-direction:column;gap:2px;background:#fff;border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;cursor:pointer;transition:all .15s;min-width:130px;max-width:180px;}
+.pcard:hover{border-color:var(--accent2);background:var(--accent-light);}
+.pcard.selected{border-color:var(--accent);background:#dbeafe;}
+.pcard-img{width:100%;height:64px;object-fit:contain;background:#fafafa;border-radius:5px;margin-bottom:4px;border:1px solid var(--border-light);}
+.pcard-img.noimg{display:none;}
+.pcard-name{font-size:13px;font-weight:700;color:var(--text);}
+.pcard-sub{font-size:11px;color:var(--muted);}
+.pcard-price{font-size:12px;color:var(--accent);font-weight:600;margin-top:2px;}
+.preset-preview{display:none;margin-top:10px;padding:10px 12px;background:#fff;border:1px solid var(--border);border-radius:8px;align-items:center;gap:12px;}
+.preset-preview.show{display:flex;}
+.preset-preview img{width:80px;height:80px;object-fit:contain;background:#fafafa;border-radius:6px;border:1px solid var(--border-light);flex-shrink:0;}
+.preset-preview .pp-info{font-size:12px;color:var(--muted);line-height:1.6;}
+.preset-preview .pp-info b{color:var(--text);font-size:13px;}
+.preset-preview .pp-info a{color:var(--accent2);}
+
+/* Tag selector */
+.tag-area{margin-top:6px;}
+.tag-group{margin-bottom:10px;}
+.tag-group-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.05em;margin-bottom:6px;}
+.tags{display:flex;flex-wrap:wrap;gap:6px;}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:20px;border:1.5px solid var(--tag-border);background:var(--tag-bg);font-size:12px;font-weight:500;color:var(--label);cursor:pointer;transition:all .15s;user-select:none;}
+.tag:hover{border-color:var(--accent2);background:#dbeafe;}
+.tag.on{background:var(--tag-on-bg);border-color:var(--tag-on);color:var(--tag-on);font-weight:700;}
+.tag .tx{font-size:10px;}
+.tag-kw{display:flex;gap:8px;align-items:center;margin-top:8px;}
+.tag-kw input{font-size:13px;padding:7px 12px;flex:1;}
+.tag-kw button{white-space:nowrap;font-size:12px;font-weight:600;padding:7px 14px;border:none;background:var(--accent);color:#fff;border-radius:7px;cursor:pointer;flex-shrink:0;}
+.tag-kw button:hover{background:var(--accent-dark);}
+.reason-preview{margin-top:10px;background:#fffef7;border:1px solid #e5e0c4;border-radius:7px;padding:10px 14px;font-size:13px;color:var(--text);line-height:1.6;min-height:44px;white-space:pre-wrap;}
+.reason-preview.empty{color:var(--muted);font-style:italic;}
+.reason-edit-btn{font-size:11px;color:var(--accent);border:none;background:none;cursor:pointer;margin-top:4px;padding:0;text-decoration:underline;}
+
+/* History */
+.htbl{width:100%;border-collapse:collapse;font-size:13px;}
+.htbl th{background:var(--sec-bg);border:1px solid var(--border);padding:8px 10px;font-size:11px;font-weight:600;color:var(--muted);text-align:center;letter-spacing:.04em;}
+.htbl td{border:1px solid var(--border-light);padding:4px 6px;}
+.htbl input{border:none;border-radius:5px;padding:7px 9px;font-size:13px;background:transparent;}
+.htbl tr:nth-child(even) td{background:#fafaf8;}
+.htbl input:focus{background:#fff;border:1px solid var(--accent2);}
+
+/* Actions */
+.actions{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid var(--border);padding:14px 20px;display:flex;gap:10px;justify-content:center;box-shadow:0 -4px 20px rgba(0,0,0,.1);z-index:50;}
+.btn{font-family:'Noto Sans JP',sans-serif;font-size:14px;font-weight:600;padding:12px 30px;border-radius:8px;border:none;cursor:pointer;transition:all .15s;letter-spacing:.04em;}
+.bp{background:var(--accent);color:#fff;box-shadow:0 2px 12px rgba(28,78,138,.35);min-width:220px;}
+.bp:hover{background:var(--accent-dark);transform:translateY(-1px);}
+.bg{background:transparent;color:var(--muted);border:1px solid var(--border);}
+.bg:hover{background:var(--sec-bg);color:var(--text);}
+.info{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:13px 16px;font-size:13px;color:#1e40af;margin-bottom:18px;display:flex;gap:10px;align-items:flex-start;line-height:1.5;}
+.div{height:1px;background:var(--border-light);margin:16px 0;}
+.sublbl{font-size:13px;font-weight:700;color:var(--label);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--border-light);}
+.note{font-size:11px;color:var(--muted);}
+.toast{position:fixed;top:76px;right:16px;background:var(--success);color:#fff;padding:13px 22px;border-radius:9px;font-size:13px;font-weight:600;box-shadow:0 4px 24px rgba(0,0,0,.22);transform:translateX(130%);transition:transform .35s cubic-bezier(.34,1.56,.64,1);z-index:999;}
+.toast.show{transform:translateX(0);}
+@media(max-width:640px){.grid{grid-template-columns:1fr;}.f.s2{grid-column:span 1;}header{flex-direction:column;align-items:flex-start;}.hb{display:none;}.preset-cards{flex-direction:column;}.pcard{max-width:100%;}}
+</style>
+</head>
+<body>
+<header>
+  <div class="hl">
+    <div class="hi">📋</div>
+    <div>
+      <h1>介護保険 福祉用具購入費支給申請書</h1>
+      <p>受領委任払い用 ／ 自動入力フォーム（福山市）</p>
+    </div>
+  </div>
+  <div class="hl" style="gap:8px;">
+    <div class="hb">📥 市役所提出用 Excel 出力</div>
+    <button class="hb" style="cursor:pointer;border:1px solid rgba(255,255,255,.28);" onclick="toggleSettings()">⚙ APIキー設定</button>
+  </div>
+</header>
+<div class="toast" id="toast"></div>
+
+<div class="container">
+  <div class="info">ℹ️&nbsp; 商品カードを選ぶと種目・商品名・金額が自動入力されます。理由はタグをクリックして組み合わせるか、キーワードで追加できます。</div>
+
+  <!-- ⚙ 設定 -->
+  <div class="sec" id="settingsPanel" style="display:none;">
+    <div class="sh"><div class="si">⚙</div><span class="st">Claude APIキー設定</span></div>
+    <div class="sb">
+      <div class="grid">
+        <div class="f"><label>Anthropic APIキー（任意・ブラウザ内にのみ保存）</label><input type="password" id="apiKeyInput" placeholder="sk-ant-..."></div>
+        <div class="f"><label>使用モデル</label>
+          <select id="apiModelInput">
+            <option value="claude-sonnet-5">claude-sonnet-5（推奨）</option>
+            <option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001（高速・低コスト）</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn bg" style="border:1px solid var(--border);margin-top:8px;" onclick="saveApiKey()">保存</button>
+      <div id="apiKeyStatus" class="note" style="margin-top:8px;"></div>
+      <p class="note" style="margin-top:8px;">APIキーを登録すると、下の「保険証から自動入力」が使えるようになります。キーはこの端末のブラウザ内にのみ保存され、外部には送信されません（保険証読み取り時のみ、入力したキーでAnthropic社のAPIに直接送信されます）。</p>
+    </div>
+  </div>
+
+  <!-- 保険証から自動入力 -->
+  <div class="sec">
+    <div class="sh"><div class="si">🪪</div><span class="st">保険証から自動入力（任意）</span></div>
+    <div class="sb">
+      <p class="note" style="margin-bottom:10px;">介護保険被保険者証の写真またはPDFをアップロードすると、氏名・フリガナ・生年月日・住所・被保険者番号をAIが読み取り、下の①欄に自動入力します（個人番号はマイナンバーカード等別途ご入力ください）。読み取り結果は必ず内容をご確認のうえご利用ください。</p>
+      <div class="f s2" style="flex-direction:row;align-items:center;gap:10px;">
+        <input type="file" id="insuranceFile" accept="image/*,application/pdf" onchange="handleInsuranceUpload(event)" style="flex:1;">
+        <button class="btn bp" style="min-width:auto;padding:9px 20px;flex-shrink:0;" id="insuranceReadBtn" onclick="readInsuranceCard()" disabled>✨ 読み取る</button>
+      </div>
+      <div id="insurancePreviewWrap"></div>
+      <div id="insuranceStatus" class="note" style="margin-top:8px;"></div>
+      <div id="insuranceReview" style="display:none;margin-top:12px;padding:14px;background:#fffef7;border:1px solid #e5e0c4;border-radius:9px;"></div>
+    </div>
+  </div>
+
+  <!-- ① 被保険者情報 -->
+  <div class="sec">
+    <div class="sh"><div class="si">👤</div><span class="st">① 被保険者情報</span></div>
+    <div class="sb">
+      <div class="grid">
+        <div class="f"><label>個人番号（12桁・任意）</label><input type="text" id="myNum" placeholder="123456789012" maxlength="12" inputmode="numeric"></div>
+        <div class="f"><label>被保険者番号（10桁）<span class="req">*</span></label><input type="text" id="insNum" placeholder="1234567890" maxlength="10" inputmode="numeric"></div>
+        <div class="f"><label>被保険者氏名（漢字）<span class="req">*</span></label><input type="text" id="name" placeholder="例：山田 太郎"></div>
+        <div class="f">
+          <label>フリガナ<span class="req">*</span></label>
+          <input type="text" id="kana" placeholder="例：ヤマダ タロウ">
+          <div class="note">※読み方に誤りがないか必ずご確認ください</div>
+        </div>
+        <div class="f">
+          <label>生年月日<span class="req">*</span></label>
+          <div class="dr">
+            <input type="number" id="bY" class="yr" placeholder="1945" min="1900" max="2010"><span>年</span>
+            <input type="number" id="bM" class="mo" placeholder="1" min="1" max="12"><span>月</span>
+            <input type="number" id="bD" class="dy" placeholder="1" min="1" max="31"><span>日</span>
+          </div>
+        </div>
+        <div class="f s2"><label>被保険者住所<span class="req">*</span></label><input type="text" id="addr" placeholder="例：広島県福山市〇〇町1-2-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 福祉用具 -->
+  <div class="sec">
+    <div class="sh"><div class="si">🛒</div><span class="st">② 購入した福祉用具（最大3品目）</span></div>
+    <div class="sb"><div id="items"></div></div>
+  </div>
+
+  <!-- ③ 申請者情報 -->
+  <div class="sec">
+    <div class="sh"><div class="si">📝</div><span class="st">③ 申請者（委任者）情報</span></div>
+    <div class="sb">
+      <div class="grid">
+        <div class="f">
+          <label>申請日<span class="req">*</span></label>
+          <div class="dr">
+            <input type="number" id="aY" class="yr" min="2020" max="2099"><span>年</span>
+            <input type="number" id="aM" class="mo" min="1" max="12"><span>月</span>
+            <input type="number" id="aD" class="dy" min="1" max="31"><span>日</span>
+          </div>
+        </div>
+        <div class="f"><label>申請者住所（被保険者と異なる場合）</label><input type="text" id="aAddr" placeholder="同じ場合は空欄"></div>
+        <div class="f"><label>申請者氏名（被保険者と異なる場合）</label><input type="text" id="aName" placeholder="同じ場合は空欄"></div>
+        <div class="f"><label>申請者電話番号（利用者ご本人の連絡先）<span class="req">*</span></label><input type="tel" id="aPhone" placeholder="例：084-123-4567"></div>
+      </div>
+      <div class="div"></div>
+      <div class="sublbl">受任者（販売事業者）情報</div>
+      <div class="grid">
+        <div class="f s2"><label>受任者住所</label><input type="text" id="dAddr" value="広島県福山市引野町南1-18-25" placeholder="販売事業者の所在地"></div>
+        <div class="f"><label>事業所名称</label><input type="text" id="dBiz" value="株式会社アスポート" placeholder="例：〇〇介護用品センター"></div>
+        <div class="f"><label>代表者名</label><input type="text" id="dRep" value="代表取締役 佐々木浩" placeholder="例：代表取締役 〇〇 〇〇"></div>
+        <div class="f"><label>担当者名</label><input type="text" id="dStaff" placeholder="例：田中 一郎"></div>
+        <div class="f"><label>受任者電話番号</label><input type="tel" id="dPhone" value="084-971-8882" placeholder="例：084-987-6543"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ 購入履歴 -->
+  <div class="sec">
+    <div class="sh"><div class="si">📅</div><span class="st">④ 過去の福祉用具購入履歴（任意）</span></div>
+    <div class="sb">
+      <p class="note" style="margin-bottom:12px;">同年度内に過去購入履歴がある場合のみ入力してください。</p>
+      <table class="htbl">
+        <thead><tr><th style="width:130px;">購入年月</th><th style="width:120px;">購入金額（円）</th><th>製品名</th></tr></thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div style="height:70px;"></div>
+</div>
+
+<div class="actions">
+  <button class="btn bg" onclick="clearForm()">🗑 クリア</button>
+  <button class="btn bg" id="pamphletBtn" onclick="generatePamphlet()">🖼 商品パンフレット資料を出力</button>
+  <button class="btn bp" id="outBtn" onclick="generateExcel()">📥 Excelファイルを出力する</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// ============================================================
+// プリセットデータ
+// ============================================================
+// 過去の出荷実績（用具顧客管理表）を集計し、購入頻度が高い順に採用したプリセット。
+// price は過去実績の平均購入金額（税込・参考値）。imageUrl はメーカー公式サイトの商品画像。
+const PRESETS = {
+  toilet: {
+    label: '🚽 腰掛便座',
+    items: [
+      { name:'ポータブルトイレFX-30S らくゾウくん（側方ガードなし）', type:'腰掛便座', price:29336, maker:'アロン化成',
+        imageUrl:'https://anju.aronkasei.co.jp/wp-content/themes/anju_theme/img/lp/fx30/item_fx30s.png',
+        productUrl:'https://anju.aronkasei.co.jp/pickup/fx30/' },
+      { name:'ポータブルトイレFX-30S らくゾウくん（側方ガード付）', type:'腰掛便座', price:33369, maker:'アロン化成',
+        imageUrl:'https://anju.aronkasei.co.jp/wp-content/themes/anju_theme/img/lp/fx30/item_fx30.png',
+        productUrl:'https://anju.aronkasei.co.jp/pickup/fx30/' },
+      { name:'補高便座やわらか#3', type:'腰掛便座', price:14357, maker:'パナソニック エイジフリー',
+        imageUrl:'https://sumai.panasonic.jp/agefree/products/toilet/raised_toilet_seat/img/img_kv_01.jpg',
+        productUrl:'https://sumai.panasonic.jp/agefree/products/toilet/raised_toilet_seat/index.html' },
+    ]
+  },
+  bath: {
+    label: '🛁 入浴補助用具',
+    items: [
+      { name:'折りたたみシャワーベンチFSフィット', type:'入浴補助用具', price:34202, maker:'アロン化成',
+        imageUrl:'https://anju.aronkasei.co.jp/wp-content/uploads/picture/02nyuuyoku/bench_oritatami/fsfit_001.jpg',
+        productUrl:'https://anju.aronkasei.co.jp/products/533597-62' },
+      { name:'折りたたみシャワーベンチFS', type:'入浴補助用具', price:34004, maker:'アロン化成',
+        imageUrl:'https://anju.aronkasei.co.jp/wp-content/uploads/picture/02nyuuyoku/bench_oritatami/fs_001.jpg',
+        productUrl:'https://anju.aronkasei.co.jp/products/533597-60' },
+      { name:'浴槽手すりUST-130N', type:'入浴補助用具', price:35281, maker:'アロン化成',
+        imageUrl:'https://anju.aronkasei.co.jp/wp-content/uploads/picture/02nyuuyoku/yokusoutesuri/ust130n_001.jpg',
+        productUrl:'https://anju.aronkasei.co.jp/products/533597-92' },
+      { name:'軽量浴槽台ジャスト12-20', type:'入浴補助用具', price:24928, maker:'アロン化成',
+        imageUrl:'https://anju.aronkasei.co.jp/wp-content/uploads/picture/02nyuuyoku/yokusoudai/keiryou_yokusoudai/keiryouyokusoudai_just1626_soft_01.jpg',
+        productUrl:'https://anju.aronkasei.co.jp/products/533597-218' },
+      { name:'軽量浴槽台ジャスト16-26', type:'入浴補助用具', price:23839, maker:'アロン化成',
+        imageUrl:'https://anju.aronkasei.co.jp/wp-content/uploads/picture/02nyuuyoku/yokusoudai/keiryou_yokusoudai/keiryouyokusoudai_just1626_soft_01.jpg',
+        productUrl:'https://anju.aronkasei.co.jp/products/533597-218' },
+      { name:'シャワーチェア ユクリアAir ミドルSP ワンタッチ', type:'入浴補助用具', price:35445, maker:'パナソニック エイジフリー',
+        imageUrl:'',
+        productUrl:'https://sumai.panasonic.jp/agefree/products/bath/yukuria-air/shower_chair_backrest_armchair/' },
+    ]
+  },
+  cane: {
+    label: '🦯 歩行補助つえ',
+    items: [
+      { name:'楽スマ スリーベース', type:'歩行補助つえ', price:22000, maker:'ケイ・ホスピア',
+        imageUrl:'https://www.hospia.co.jp/stick/img/3base/title_3base_n.jpg',
+        productUrl:'https://www.hospia.co.jp/stick/3base.html' },
+      { name:'四点前後可動固定式2ウェイステッキ', type:'歩行補助つえ', price:14367, maker:'ユーバ産業',
+        imageUrl:'https://www.uber.co.jp/common/images/stick/stick_2way_darkgray_big.jpg',
+        productUrl:'https://www.uber.co.jp/ncp/stick_2way.html' },
+    ]
+  },
+  slope: {
+    label: '🛤 スロープ',
+    items: [
+      { name:'ダイヤスロープ DS76シリーズ', type:'スロープ', price:7480, maker:'シンエイテクノ',
+        imageUrl:'https://diamat.jp/cms/wp-content/themes/shineitechno/img/diaslope76_01.jpg',
+        productUrl:'https://diamat.jp/products/diaslope76/' },
+    ]
+  }
+};
+
+// ============================================================
+// 理由タグデータ
+// ============================================================
+const TAG_GROUPS = [
+  {
+    label: '身体状況',
+    tags: [
+      '下肢筋力低下', '上肢筋力低下', '体幹バランス低下', '麻痺（片麻痺）', '麻痺（両麻痺）',
+      '関節拘縮', '骨折後', '術後', '疼痛あり', '起立困難', '歩行困難', '立位不安定',
+      '座位保持困難', 'めまい・ふらつきあり', '視力低下', '認知症'
+    ]
+  },
+  {
+    label: '日常動作への影響',
+    tags: [
+      '入浴動作困難', '洗身困難', '浴槽への移乗困難', '浴槽内での立ち座り困難',
+      'トイレ動作困難', '便座からの立ち座り困難', '屋内移動困難', '屋外移動困難',
+      '起居動作困難', '移乗困難'
+    ]
+  },
+  {
+    label: '使用目的・効果',
+    tags: [
+      '安全な入浴を可能にする', '自立した入浴動作を支援する', '転倒リスクを軽減する',
+      '安全なトイレ動作を可能にする', '自立したトイレ動作を支援する',
+      '安全な移動を可能にする', '歩行の安定を図る', '介護者の負担を軽減する',
+      '自立生活を維持する'
+    ]
+  }
+];
+
+// ============================================================
+// 保険証から自動入力（Claude API）
+// ============================================================
+const API_KEY_STORAGE = "asport_shinsei_api_key";
+const API_MODEL_STORAGE = "asport_shinsei_api_model";
+let insuranceFileDataUrl = null; // data URL (image or PDF)
+let insuranceFileKind = null;    // "image" | "pdf"
+
+function toggleSettings(){
+  const el = document.getElementById("settingsPanel");
+  el.style.display = (el.style.display === "none" || !el.style.display) ? "block" : "none";
+}
+function loadApiKeyUI(){
+  document.getElementById("apiKeyInput").value = localStorage.getItem(API_KEY_STORAGE) || "";
+  document.getElementById("apiModelInput").value = localStorage.getItem(API_MODEL_STORAGE) || "claude-sonnet-5";
+}
+function saveApiKey(){
+  const key = document.getElementById("apiKeyInput").value.trim();
+  const model = document.getElementById("apiModelInput").value;
+  localStorage.setItem(API_KEY_STORAGE, key);
+  localStorage.setItem(API_MODEL_STORAGE, model);
+  const s = document.getElementById("apiKeyStatus");
+  s.textContent = key ? "保存しました。「保険証から自動入力」が使えます。" : "保存しました（キー未設定のため自動入力は使えません）。";
+  s.style.color = "var(--success)";
+}
+function getApiKey(){ return localStorage.getItem(API_KEY_STORAGE) || ""; }
+function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claude-sonnet-5"; }
+
+async function callClaudeAPI(messages, maxTokens=800){
+  const apiKey = getApiKey();
+  if(!apiKey) throw new Error("NO_API_KEY");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "x-api-key": apiKey,
+      "anthropic-version":"2023-06-01",
+      "anthropic-dangerous-direct-browser-access":"true"
+    },
+    body: JSON.stringify({ model: getApiModel(), max_tokens: maxTokens, messages })
+  });
+  if(!res.ok){
+    const t = await res.text().catch(()=> "");
+    throw new Error("API_ERROR:" + res.status + ":" + t);
+  }
+  const data = await res.json();
+  const block = (data.content || []).find(c => c.type === "text");
+  return block ? block.text : "";
+}
+
+function handleInsuranceUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    if(isPdf){
+      insuranceFileDataUrl = e.target.result;
+      insuranceFileKind = "pdf";
+      document.getElementById("insurancePreviewWrap").innerHTML =
+        `<div style="margin-top:8px;padding:8px 12px;background:#f0f0f0;border-radius:6px;display:inline-block;font-size:13px;">📄 ${file.name}（PDF）</div>`;
+      document.getElementById("insuranceReadBtn").disabled = false;
+    } else {
+      const img = new Image();
+      img.onload = ()=>{
+        let {width,height} = img;
+        const maxDim = 1400;
+        if(width > maxDim || height > maxDim){
+          const ratio = Math.min(maxDim/width, maxDim/height);
+          width = Math.round(width*ratio); height = Math.round(height*ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        canvas.getContext("2d").drawImage(img,0,0,width,height);
+        insuranceFileDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        insuranceFileKind = "image";
+        document.getElementById("insurancePreviewWrap").innerHTML =
+          `<img src="${insuranceFileDataUrl}" style="max-width:200px;border-radius:6px;border:1px solid #ccc;margin-top:8px;">`;
+        document.getElementById("insuranceReadBtn").disabled = false;
+      };
+      img.src = e.target.result;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function readInsuranceCard(){
+  const statusEl = document.getElementById("insuranceStatus");
+  if(!insuranceFileDataUrl){
+    statusEl.textContent = "先に画像またはPDFをアップロードしてください。";
+    statusEl.style.color = "var(--error)";
+    return;
+  }
+  if(!getApiKey()){
+    statusEl.textContent = "APIキーが未設定です。右上の「⚙ APIキー設定」から登録してください。";
+    statusEl.style.color = "var(--error)";
+    return;
+  }
+  statusEl.textContent = "読み取り中…";
+  statusEl.style.color = "var(--muted)";
+  try{
+    const base64 = insuranceFileDataUrl.split(",")[1];
+    const prompt = `これは介護保険被保険者証の写真またはスキャンです。以下の項目をできる限り正確に読み取り、JSON形式のみで出力してください（説明文は不要）。生年月日は西暦4桁に変換してください（元号の目安：明治=1868〜、大正=1912〜、昭和=1926〜、平成=1989〜、令和=2019〜）。読み取れない項目は空文字にしてください。\n\n※注意：介護保険被保険者証には氏名のフリガナが印字されていないことがほとんどです。証書にフリガナの記載が無い場合は、氏名（漢字）の一般的な読み方からフリガナを推定して必ず入力してください（空欄のままにしないでください）。ユーザー側の画面で読み方を必ず確認・修正できるようになっているので、推定で構いません。\n{\n"name":"氏名（漢字）",\n"kana":"フリガナ（証書に記載が無ければ氏名から読みを推定する）",\n"birth_year":"生年（西暦4桁、数字のみ）",\n"birth_month":"生月（数字のみ）",\n"birth_day":"生日（数字のみ）",\n"address":"住所",\n"insurer_number":"被保険者番号（数字のみ）",\n"yokaigo":"要介護状態区分（例：要介護1、分かれば）"\n}`;
+    let fileBlock;
+    if(insuranceFileKind === "pdf"){
+      fileBlock = {type:"document", source:{type:"base64", media_type:"application/pdf", data: base64}};
+    } else {
+      const mediaType = insuranceFileDataUrl.substring(5, insuranceFileDataUrl.indexOf(";"));
+      fileBlock = {type:"image", source:{type:"base64", media_type: mediaType, data: base64}};
+    }
+    const text = await callClaudeAPI([{role:"user", content:[fileBlock, {type:"text", text: prompt}]}], 500);
+    const m = text.match(/\{[\s\S]*\}/);
+    if(!m) throw new Error("PARSE_ERROR");
+    const parsed = JSON.parse(m[0]);
+    showInsuranceReview(parsed);
+    statusEl.textContent = "読み取りが完了しました。内容を確認して「①欄に反映」を押してください。";
+    statusEl.style.color = "var(--success)";
+  }catch(err){
+    statusEl.textContent = "読み取りに失敗しました。画像を変えて再試行するか、手入力してください。（" + err.message + "）";
+    statusEl.style.color = "var(--error)";
+  }
+}
+
+function showInsuranceReview(d){
+  const box = document.getElementById("insuranceReview");
+  box.style.display = "block";
+  box.innerHTML = `
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px;">読み取り結果（確認・修正してください）<span class="note">※AI読み取り・要確認</span></div>
+    <div class="grid">
+      <div class="f"><label>氏名</label><input type="text" id="ir_name" value="${escHtml(d.name||"")}"></div>
+      <div class="f"><label>フリガナ<span class="note">※証書に記載が無い場合はAIが推定。必ず確認してください</span></label><input type="text" id="ir_kana" value="${escHtml(d.kana||"")}"></div>
+      <div class="f">
+        <label>生年月日（西暦）</label>
+        <div class="dr">
+          <input type="number" id="ir_y" class="yr" value="${escHtml(d.birth_year||"")}" min="1900" max="2099"><span>年</span>
+          <input type="number" id="ir_m" class="mo" value="${escHtml(d.birth_month||"")}" min="1" max="12"><span>月</span>
+          <input type="number" id="ir_d" class="dy" value="${escHtml(d.birth_day||"")}" min="1" max="31"><span>日</span>
+        </div>
+      </div>
+      <div class="f s2"><label>住所</label><input type="text" id="ir_addr" value="${escHtml(d.address||"")}"></div>
+      <div class="f"><label>被保険者番号</label><input type="text" id="ir_insnum" value="${escHtml(d.insurer_number||"")}"></div>
+      <div class="f"><label>要介護状態区分（参考）</label><input type="text" id="ir_yokaigo" value="${escHtml(d.yokaigo||"")}" disabled></div>
+    </div>
+    <button class="btn bp" style="min-width:auto;padding:9px 20px;margin-top:10px;" onclick="applyInsuranceToForm()">①欄に反映する</button>
+  `;
+  attachAllDateSpinners();
+}
+
+function applyInsuranceToForm(){
+  document.getElementById("name").value = document.getElementById("ir_name").value;
+  document.getElementById("kana").value = document.getElementById("ir_kana").value;
+  document.getElementById("bY").value = document.getElementById("ir_y").value;
+  document.getElementById("bM").value = document.getElementById("ir_m").value;
+  document.getElementById("bD").value = document.getElementById("ir_d").value;
+  document.getElementById("addr").value = document.getElementById("ir_addr").value;
+  document.getElementById("insNum").value = document.getElementById("ir_insnum").value;
+  const statusEl = document.getElementById("insuranceStatus");
+  statusEl.textContent = "①被保険者情報欄に反映しました（個人番号は別途ご入力ください）。";
+  statusEl.style.color = "var(--success)";
+}
+
+function escHtml(str){
+  return String(str).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+// ============================================================
+// 各品目の状態管理
+// ============================================================
+const itemState = [1,2,3].map(n => ({
+  n,
+  selectedTags: new Set(),
+  customPhrases: [],
+  manualEdit: false
+}));
+
+// ============================================================
+// 品目ブロックの構築
+// ============================================================
+function buildItems() {
+  const container = document.getElementById('items');
+  [1,2,3].forEach(n => {
+    const opt = n > 1;
+    const div = document.createElement('div');
+    div.className = 'ib';
+    div.id = `block${n}`;
+    div.innerHTML = `
+      <div class="ih" style="justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="in">${n}</div>
+          品目 ${n}${opt ? '（任意）' : '<span class="req" style="margin-left:4px;">*</span>'}
+        </div>
+        ${opt ? `<button type="button" id="delBtn${n}" class="reason-edit-btn" style="color:var(--error);display:none;" onclick="removeItemBlock(${n})">－ この品目を削除</button>` : ''}
+      </div>
+      <div class="ibody">
+
+        <!-- プリセット選択 -->
+        <div class="preset-section">
+          <div class="preset-label">⚡ 商品を選択して自動入力</div>
+          <div class="preset-cards" id="pcards${n}"></div>
+          <div style="margin-top:10px;font-size:11px;color:var(--muted);">選択後に商品名・金額を編集することもできます</div>
+          <div class="preset-preview" id="presetPreview${n}"></div>
+        </div>
+
+        <!-- 入力フォーム -->
+        <div class="grid">
+          <div class="f"><label>種目名${opt?'':' <span class="req">*</span>'}</label><input type="text" id="i${n}t" placeholder="例：入浴補助用具"></div>
+          <div class="f"><label>商品名${opt?'':' <span class="req">*</span>'}</label><input type="text" id="i${n}n" placeholder="例：シャワーチェア〇〇型"></div>
+          <div class="f"><label>製造事業者名</label><input type="text" id="i${n}mk" placeholder="例：〇〇株式会社"></div>
+          <div class="f"><label>販売事業者名${opt?'':' <span class="req">*</span>'}</label><input type="text" id="i${n}sl" value="株式会社アスポート" placeholder="例：△△介護用品店"></div>
+          <div class="f"><label>事業所番号</label><input type="text" id="i${n}bn" value="3471500771" maxlength="10"></div>
+          <div class="f"><label>購入金額（税込・円）${opt?'':' <span class="req">*</span>'}</label><input type="number" id="i${n}p" min="0" placeholder="例：15000"></div>
+          <div class="f">
+            <label>購入日${opt?'':' <span class="req">*</span>'}</label>
+            <div class="dr">
+              <input type="number" id="i${n}y" class="yr" placeholder="2024" min="2000" max="2099"><span>年</span>
+              <input type="number" id="i${n}m" class="mo" placeholder="3" min="1" max="12"><span>月</span>
+              <input type="number" id="i${n}d" class="dy" placeholder="15" min="1" max="31"><span>日</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 理由タグセクション -->
+        <div style="margin-top:16px;">
+          <label style="display:block;margin-bottom:8px;">福祉用具が必要な理由${opt?'':' <span class="req">*</span>'}</label>
+          <div class="tag-area" id="tagarea${n}"></div>
+
+          <!-- キーワード追加 -->
+          <div class="tag-kw">
+            <input type="text" id="kwInput${n}" placeholder="キーワードを入力して追加（例：右半身麻痺）" onkeydown="if(event.key==='Enter'){addKw(${n});}">
+            <button onclick="addKw(${n})">＋ 追加</button>
+          </div>
+
+          <!-- 理由プレビュー -->
+          <div style="margin-top:10px;">
+            <label style="display:block;margin-bottom:4px;">生成された理由文</label>
+            <div class="reason-preview empty" id="preview${n}">タグを選択すると理由文が自動生成されます</div>
+            <button class="reason-edit-btn" onclick="toggleEdit(${n})">✏️ 直接編集する</button>
+            <textarea id="i${n}r" style="display:none;margin-top:6px;" placeholder="理由を直接入力する場合はここに記入してください"></textarea>
+          </div>
+        </div>
+      </div>`;
+    if (opt) div.style.display = 'none'; // 品目2・3は複数購入時のみ表示
+    container.appendChild(div);
+
+    buildPresetCards(n);
+    buildTagGroups(n);
+  });
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.id = 'addItemBtn';
+  addBtn.className = 'btn bg';
+  addBtn.style.cssText = 'margin-top:8px;border:1px dashed var(--border);';
+  addBtn.textContent = '＋ 品目を追加（同時に複数の福祉用具を購入する場合のみ）';
+  addBtn.onclick = addNextItemBlock;
+  container.parentNode.insertBefore(addBtn, container.nextSibling);
+}
+
+let visibleItemCount = 1;
+// プリセットから選択された品目の詳細（写真URL・商品ページURL等）を品目番号ごとに保持
+// パンフレット資料出力時に参照する
+let selectedItemData = {};
+function updateDeleteButtons(){
+  [2,3].forEach(n => {
+    const btn = document.getElementById(`delBtn${n}`);
+    if (btn) btn.style.display = (n === visibleItemCount) ? '' : 'none';
+  });
+}
+function addNextItemBlock(){
+  if (visibleItemCount >= 3) return;
+  visibleItemCount++;
+  document.getElementById(`block${visibleItemCount}`).style.display = '';
+  setTodayOnItemDate(visibleItemCount);
+  if (visibleItemCount >= 3) document.getElementById('addItemBtn').style.display = 'none';
+  updateDeleteButtons();
+}
+function removeItemBlock(n){
+  ['t','n','mk','p'].forEach(suf => { const el = document.getElementById(`i${n}${suf}`); if (el) el.value = ''; });
+  setTodayOnItemDate(n);
+  document.getElementById(`i${n}sl`).value = '株式会社アスポート';
+  document.getElementById(`i${n}bn`).value = '3471500771';
+  itemState[n-1].selectedTags.clear();
+  itemState[n-1].customPhrases = [];
+  itemState[n-1].manualEdit = false;
+  renderTags(n);
+  updatePreview(n);
+  document.querySelectorAll(`#pcards${n} .pcard`).forEach(c=>c.classList.remove('selected'));
+  document.getElementById(`presetPreview${n}`).classList.remove('show');
+  document.getElementById(`presetPreview${n}`).innerHTML = '';
+  document.getElementById(`customGroup${n}`).style.display = 'none';
+  document.getElementById(`customTags${n}`).innerHTML = '';
+  document.getElementById(`block${n}`).style.display = 'none';
+  delete selectedItemData[n];
+  visibleItemCount = n - 1;
+  document.getElementById('addItemBtn').style.display = '';
+  updateDeleteButtons();
+}
+
+function buildPresetCards(n) {
+  const container = document.getElementById(`pcards${n}`);
+  Object.entries(PRESETS).forEach(([key, group]) => {
+    const groupDiv = document.createElement('div');
+    groupDiv.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+    const glabel = document.createElement('div');
+    glabel.style.cssText = 'font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.05em;';
+    glabel.textContent = group.label;
+    groupDiv.appendChild(glabel);
+    const cardsRow = document.createElement('div');
+    cardsRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
+    group.items.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'pcard';
+      card.dataset.itemn = n;
+      card.dataset.key = key;
+      const imgTag = item.imageUrl
+        ? `<img class="pcard-img" src="${item.imageUrl}" alt="${item.name}" loading="lazy" onerror="this.classList.add('noimg')">`
+        : '';
+      card.innerHTML = `${imgTag}<span class="pcard-name">${item.name}</span><span class="pcard-sub">${item.type}${item.maker?' ／ '+item.maker:''}</span><span class="pcard-price">参考：${item.price.toLocaleString()}円</span>`;
+      card.addEventListener('click', () => selectPreset(n, key, item, card));
+      cardsRow.appendChild(card);
+    });
+    groupDiv.appendChild(cardsRow);
+    container.appendChild(groupDiv);
+  });
+}
+
+function selectPreset(n, key, item, card) {
+  // Deselect all cards in this item block
+  document.querySelectorAll(`#pcards${n} .pcard`).forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  document.getElementById(`i${n}t`).value = item.type;
+  document.getElementById(`i${n}n`).value = item.name;
+  document.getElementById(`i${n}p`).value = item.price;
+  if (item.maker) document.getElementById(`i${n}mk`).value = item.maker;
+  // パンフレット資料出力用に写真URL・商品ページURLなどを保持
+  selectedItemData[n] = item;
+  // 写真・商品ページを自動表示
+  showPresetPreview(n, item);
+  // Update reason suggestion based on category
+  updateReasonSuggestion(n, key, item);
+}
+
+function showPresetPreview(n, item) {
+  const box = document.getElementById(`presetPreview${n}`);
+  const imgTag = item.imageUrl
+    ? `<img src="${item.imageUrl}" alt="${item.name}" onerror="this.style.display='none'">`
+    : `<div style="width:80px;height:80px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#fafafa;border:1px dashed var(--border);border-radius:6px;font-size:10px;color:var(--muted);text-align:center;">写真\n未登録</div>`;
+  box.innerHTML = `
+    ${imgTag}
+    <div class="pp-info">
+      <b>${item.name}</b><br>
+      ${item.maker ? item.maker+'／' : ''}参考価格 ${item.price.toLocaleString()}円<br>
+      ${item.productUrl ? `<a href="${item.productUrl}" target="_blank" rel="noopener">メーカー商品ページを見る ↗</a>` : ''}
+    </div>`;
+  box.classList.add('show');
+}
+
+function updateReasonSuggestion(n, key, item) {
+  // カテゴリ（および商品名）に応じて関連度の高いタグを自動選択
+  const st = itemState[n-1];
+  st.selectedTags.clear();
+  const name = item ? item.name : '';
+  if (key === 'bath') {
+    if (name.includes('浴槽台') || name.includes('浴槽手すり')) {
+      st.selectedTags.add('浴槽内での立ち座り困難');
+      st.selectedTags.add('浴槽への移乗困難');
+      st.selectedTags.add('安全な入浴を可能にする');
+    } else {
+      st.selectedTags.add('入浴動作困難');
+      st.selectedTags.add('洗身困難');
+      st.selectedTags.add('安全な入浴を可能にする');
+    }
+  } else if (key === 'toilet') {
+    if (name.includes('ポータブルトイレ')) {
+      st.selectedTags.add('屋内移動困難');
+      st.selectedTags.add('トイレ動作困難');
+      st.selectedTags.add('安全なトイレ動作を可能にする');
+    } else {
+      st.selectedTags.add('便座からの立ち座り困難');
+      st.selectedTags.add('起立困難');
+      st.selectedTags.add('安全なトイレ動作を可能にする');
+    }
+  } else if (key === 'cane') {
+    st.selectedTags.add('歩行困難');
+    st.selectedTags.add('立位不安定');
+    st.selectedTags.add('歩行の安定を図る');
+  } else if (key === 'slope') {
+    st.selectedTags.add('屋外移動困難');
+    st.selectedTags.add('安全な移動を可能にする');
+  }
+  renderTags(n);
+  updatePreview(n);
+}
+
+function buildTagGroups(n) {
+  const area = document.getElementById(`tagarea${n}`);
+  TAG_GROUPS.forEach(group => {
+    const gDiv = document.createElement('div');
+    gDiv.className = 'tag-group';
+    const lbl = document.createElement('div');
+    lbl.className = 'tag-group-label';
+    lbl.textContent = group.label;
+    gDiv.appendChild(lbl);
+    const tags = document.createElement('div');
+    tags.className = 'tags';
+    tags.id = `tags_${n}_${group.label}`;
+    group.tags.forEach(tag => {
+      tags.appendChild(makeTag(n, tag));
+    });
+    gDiv.appendChild(tags);
+    area.appendChild(gDiv);
+  });
+  // Custom tags area
+  const customGroup = document.createElement('div');
+  customGroup.className = 'tag-group';
+  customGroup.id = `customGroup${n}`;
+  customGroup.style.display = 'none';
+  const clbl = document.createElement('div');
+  clbl.className = 'tag-group-label';
+  clbl.textContent = '追加したキーワード';
+  customGroup.appendChild(clbl);
+  const ctags = document.createElement('div');
+  ctags.className = 'tags';
+  ctags.id = `customTags${n}`;
+  customGroup.appendChild(ctags);
+  area.appendChild(customGroup);
+}
+
+function makeTag(n, text, isCustom=false) {
+  const tag = document.createElement('span');
+  tag.className = 'tag';
+  tag.innerHTML = isCustom
+    ? `${text} <span class="tx" style="cursor:pointer;" onclick="removeCustomTag(${n},'${text}',this.parentElement)">✕</span>`
+    : text;
+  const st = itemState[n-1];
+  if (st.selectedTags.has(text)) tag.classList.add('on');
+  if (!isCustom) {
+    tag.addEventListener('click', () => {
+      if (st.selectedTags.has(text)) { st.selectedTags.delete(text); tag.classList.remove('on'); }
+      else { st.selectedTags.add(text); tag.classList.add('on'); }
+      updatePreview(n);
+    });
+  }
+  return tag;
+}
+
+function renderTags(n) {
+  const st = itemState[n-1];
+  TAG_GROUPS.forEach(group => {
+    const container = document.getElementById(`tags_${n}_${group.label}`);
+    if (!container) return;
+    container.querySelectorAll('.tag').forEach(tag => {
+      const text = tag.textContent.trim();
+      if (st.selectedTags.has(text)) tag.classList.add('on');
+      else tag.classList.remove('on');
+    });
+  });
+}
+
+function addKw(n) {
+  const input = document.getElementById(`kwInput${n}`);
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  const st = itemState[n-1];
+  if (!st.customPhrases.includes(text)) {
+    st.customPhrases.push(text);
+    st.selectedTags.add(text);
+    const ctags = document.getElementById(`customTags${n}`);
+    ctags.appendChild(makeTag(n, text, true));
+    document.getElementById(`customGroup${n}`).style.display = '';
+    updatePreview(n);
+  }
+}
+
+function removeCustomTag(n, text, tagEl) {
+  const st = itemState[n-1];
+  st.customPhrases = st.customPhrases.filter(t => t !== text);
+  st.selectedTags.delete(text);
+  tagEl.remove();
+  if (document.getElementById(`customTags${n}`).children.length === 0) {
+    document.getElementById(`customGroup${n}`).style.display = 'none';
+  }
+  updatePreview(n);
+}
+
+function buildReason(n) {
+  const st = itemState[n-1];
+  if (st.selectedTags.size === 0 && st.customPhrases.length === 0) return '';
+
+  const itemName = document.getElementById(`i${n}n`).value.trim() || '当該福祉用具';
+
+  // Group selected tags
+  const bodyTags = TAG_GROUPS[0].tags.filter(t => st.selectedTags.has(t));
+  const actTags  = TAG_GROUPS[1].tags.filter(t => st.selectedTags.has(t));
+  const effTags  = TAG_GROUPS[2].tags.filter(t => st.selectedTags.has(t));
+  const custom   = st.customPhrases.filter(t => st.selectedTags.has(t));
+
+  let parts = [];
+  if (bodyTags.length || custom.length) {
+    const all = [...bodyTags, ...custom];
+    parts.push(all.join('・') + 'のため、');
+  }
+  if (actTags.length) {
+    parts.push(actTags.join('・') + 'な状態である。');
+  }
+  if (effTags.length) {
+    parts.push(`${itemName}を使用することで、${effTags.join('・')}ために必要である。`);
+  } else if (parts.length > 0) {
+    parts.push(`${itemName}の使用が必要である。`);
+  }
+  return parts.join('');
+}
+
+function updatePreview(n) {
+  const st = itemState[n-1];
+  if (st.manualEdit) return;
+  const reason = buildReason(n);
+  const preview = document.getElementById(`preview${n}`);
+  if (reason) {
+    preview.textContent = reason;
+    preview.classList.remove('empty');
+  } else {
+    preview.textContent = 'タグを選択すると理由文が自動生成されます';
+    preview.classList.add('empty');
+  }
+}
+
+function toggleEdit(n) {
+  const st = itemState[n-1];
+  const preview = document.getElementById(`preview${n}`);
+  const textarea = document.getElementById(`i${n}r`);
+  const btn = preview.nextElementSibling;
+  if (!st.manualEdit) {
+    st.manualEdit = true;
+    textarea.value = buildReason(n);
+    preview.style.display = 'none';
+    textarea.style.display = '';
+    btn.textContent = '🔄 タグ生成に戻す';
+  } else {
+    st.manualEdit = false;
+    textarea.style.display = 'none';
+    preview.style.display = '';
+    btn.textContent = '✏️ 直接編集する';
+    updatePreview(n);
+  }
+}
+
+function getReason(n) {
+  const st = itemState[n-1];
+  if (st.manualEdit) return document.getElementById(`i${n}r`).value.trim();
+  return buildReason(n);
+}
+
+// ============================================================
+// 履歴テーブル
+// ============================================================
+(function(){
+  const t = document.getElementById('histBody');
+  for (let i = 1; i <= 6; i++) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><input type="text" id="h${i}dt" placeholder="${i===1?'例：2023年4月':''}"></td><td><input type="number" id="h${i}pr" min="0" placeholder="${i===1?'例：15000':''}"></td><td><input type="text" id="h${i}nm" placeholder="${i===1?'例：シャワーチェア':''}"></td>`;
+    t.appendChild(tr);
+  }
+})();
+
+// 今日の日付（申請日・各品目の購入日の初期値として使う。購入日が実際と異なる場合は変更してください）
+function todayYMD(){
+  const t = new Date();
+  return { y: t.getFullYear(), m: t.getMonth()+1, d: t.getDate() };
+}
+function setTodayOnItemDate(n){
+  const {y,m,d} = todayYMD();
+  const ey = document.getElementById(`i${n}y`), em = document.getElementById(`i${n}m`), ed = document.getElementById(`i${n}d`);
+  if (ey) ey.value = y;
+  if (em) em.value = m;
+  if (ed) ed.value = d;
+}
+(function(){
+  const {y,m,d} = todayYMD();
+  document.getElementById('aY').value = y;
+  document.getElementById('aM').value = m;
+  document.getElementById('aD').value = d;
+})();
+
+// ============================================================
+// 年月日スピナー（▲▼クリックで増減。月は12→1、日は31→1のように一周する）
+// ============================================================
+function attachDateSpinner(input){
+  if (!input || input.dataset.spinnerAttached) return;
+  input.dataset.spinnerAttached = '1';
+  const min = parseInt(input.min), max = parseInt(input.max);
+  if (isNaN(min) || isNaN(max)) return;
+  const wrap = document.createElement('span');
+  wrap.className = 'spin-wrap';
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(input);
+  const btns = document.createElement('span');
+  btns.className = 'spin-btns';
+  const up = document.createElement('button');
+  up.type = 'button'; up.textContent = '▲'; up.tabIndex = -1;
+  const down = document.createElement('button');
+  down.type = 'button'; down.textContent = '▼'; down.tabIndex = -1;
+  btns.appendChild(up); btns.appendChild(down);
+  wrap.appendChild(btns);
+  const step = (delta) => {
+    let v = parseInt(input.value);
+    if (isNaN(v)) v = delta > 0 ? min : max;
+    else {
+      v += delta;
+      if (v > max) v = min;
+      if (v < min) v = max;
+    }
+    input.value = v;
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+    input.dispatchEvent(new Event('change', {bubbles:true}));
+  };
+  up.addEventListener('click', () => step(1));
+  down.addEventListener('click', () => step(-1));
+}
+function attachAllDateSpinners(){
+  document.querySelectorAll('.dr input.mo, .dr input.dy').forEach(attachDateSpinner);
+}
+
+// ============================================================
+// ユーティリティ
+// ============================================================
+function g(id){ return (document.getElementById(id)?.value||'').trim(); }
+function gi(id){ return parseInt(document.getElementById(id)?.value)||0; }
+function fmtN(n){ return n ? parseInt(n).toLocaleString() : ''; }
+function fmtDt(y,m,d){ return (y&&m&&d) ? `${y}年　${m}月　${d}日` : ''; }
+
+function toast(msg, ok=true){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = ok ? 'var(--success)' : '#b91c1c';
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 4000);
+}
+
+function clearForm(){
+  if (!confirm('入力内容をすべてクリアしますか？')) return;
+  document.querySelectorAll('input,textarea').forEach(el => {
+    if (el.id === 'apiKeyInput' || el.id === 'apiModelInput') return; // APIキー設定は保持
+    el.value='';
+  });
+  const t = new Date();
+  document.getElementById('aY').value = t.getFullYear();
+  document.getElementById('aM').value = t.getMonth()+1;
+  document.getElementById('aD').value = t.getDate();
+  // 販売事業者情報（アスポート）のデフォルト値を復元
+  document.getElementById('dAddr').value = '広島県福山市引野町南1-18-25';
+  document.getElementById('dBiz').value = '株式会社アスポート';
+  document.getElementById('dRep').value = '代表取締役 佐々木浩';
+  document.getElementById('dPhone').value = '084-971-8882';
+  [1,2,3].forEach(n => {
+    document.getElementById(`i${n}sl`).value = '株式会社アスポート';
+    document.getElementById(`i${n}bn`).value = '3471500771';
+    setTodayOnItemDate(n);
+  });
+  // 品目2・3を再び非表示に戻す
+  document.getElementById('block2').style.display = 'none';
+  document.getElementById('block3').style.display = 'none';
+  selectedItemData = {};
+  visibleItemCount = 1;
+  document.getElementById('addItemBtn').style.display = '';
+  updateDeleteButtons();
+  // 保険証読み取り状態のリセット
+  insuranceFileDataUrl = null; insuranceFileKind = null;
+  document.getElementById('insurancePreviewWrap').innerHTML = '';
+  document.getElementById('insuranceStatus').textContent = '';
+  document.getElementById('insuranceReview').style.display = 'none';
+  document.getElementById('insuranceReview').innerHTML = '';
+  document.getElementById('insuranceReadBtn').disabled = true;
+  [1,2,3].forEach(n => {
+    document.getElementById(`presetPreview${n}`).classList.remove('show');
+    document.getElementById(`presetPreview${n}`).innerHTML = '';
+    itemState[n-1].selectedTags.clear();
+    itemState[n-1].customPhrases = [];
+    itemState[n-1].manualEdit = false;
+    renderTags(n);
+    updatePreview(n);
+    document.querySelectorAll(`#pcards${n} .pcard`).forEach(c=>c.classList.remove('selected'));
+    const textarea = document.getElementById(`i${n}r`);
+    const preview = document.getElementById(`preview${n}`);
+    textarea.style.display='none'; preview.style.display='';
+    document.getElementById(`customGroup${n}`).style.display='none';
+    document.getElementById(`customTags${n}`).innerHTML='';
+  });
+}
+
+function validate(){
+  const checks=[
+    ['insNum','被保険者番号'],
+    ['name','被保険者氏名'],['kana','フリガナ'],
+    ['bY','生年（生年月日）'],['addr','被保険者住所'],
+    ['i1t','品目1：種目名'],['i1n','品目1：商品名'],
+    ['i1sl','品目1：販売事業者名'],['i1p','品目1：購入金額'],
+    ['i1y','品目1：購入年'],
+    ['aPhone','申請者電話番号']
+  ];
+  for (const [id, lbl] of checks) {
+    if (!g(id)) { toast(`⚠ 「${lbl}」を入力してください`, false); document.getElementById(id)?.focus(); return false; }
+  }
+  return true;
+}
+
+// ============================================================
+// Excel出力（福山市公式様式ファイルに直接差し込み）
+// ============================================================
+
+// 公式様式ファイル（332067.xlsx）を base64 化して埋め込み。
+// セルの罫線・網掛け・結合などの書式を一切崩さず、値だけを該当セルへ差し込むため、
+// SheetJSでワークブックを新規作成するのではなく、xlsx内部のsheet1.xmlを直接書き換える。
+const OFFICIAL_TEMPLATE_B64 = "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";
+
+function xmlEscape(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+
+// 指定セル（例："C14"）の内容を書き換える。既存の罫線・網掛け等のスタイル(s属性)は維持し、
+// 値だけを inlineStr として差し込む。空値の場合は何もしない（元のヒント文字を残す）。
+function setCellInXml(xml, ref, value){
+  if (value === undefined || value === null || value === '') return xml;
+  const re = new RegExp('<c r="' + ref + '"([^>]*?)(?:/>|>[\\s\\S]*?</c>)');
+  const m = xml.match(re);
+  if (!m) { console.warn('セルが見つかりません:', ref); return xml; }
+  const attrs = m[1] || '';
+  const sMatch = attrs.match(/\ss="(\d+)"/);
+  const sAttr = sMatch ? ` s="${sMatch[1]}"` : '';
+  const escaped = xmlEscape(value);
+  const newCell = `<c r="${ref}"${sAttr} t="inlineStr"><is><t xml:space="preserve">${escaped}</t></is></c>`;
+  return xml.replace(m[0], newCell);
+}
+
+// 数字文字列を先頭から1桁ずつ、指定行の R,S,T,U,V,W,X,Y,Z,AA 列（最大10桁）の
+// マス目に差し込む（被保険者番号・事業所番号の記入欄用）。
+function digitsToCells(xml, digitsStr, row, maxLen){
+  const cols = ['R','S','T','U','V','W','X','Y','Z','AA'];
+  const digits = String(digitsStr||'').replace(/[^0-9]/g,'').split('');
+  const lim = Math.min(digits.length, maxLen||10, cols.length);
+  for (let i=0;i<lim;i++){
+    xml = setCellInXml(xml, cols[i]+row, digits[i]);
+  }
+  return xml;
+}
+
+// "084-971-8882" のようなハイフン区切りの電話番号を、様式の「電話番号（　）－」欄に合わせて整形する。
+function fmtPhoneField(label, phone){
+  if (!phone) return '';
+  const parts = String(phone).split(/[-ー－]/).map(s=>s.trim()).filter(Boolean);
+  if (parts.length===3) return `${label}（${parts[0]}）${parts[1]}－${parts[2]}`;
+  return `${label}：${phone}`;
+}
+
+// 個人番号（12桁）を4桁ずつ区切って読みやすく整形する。
+function fmt12(str){
+  const d = String(str||'').replace(/[^0-9]/g,'');
+  return d.replace(/(\d{4})(?=\d)/g,'$1 ');
+}
+
+function generateExcel(){
+  if (!validate()) return;
+  const btn = document.getElementById('outBtn');
+  btn.textContent='⏳ 生成中...'; btn.disabled=true;
+  setTimeout(async ()=>{
+    try { await doGenerate(); toast('✅ Excelファイルを出力しました'); }
+    catch(e) { console.error(e); toast('❌ エラー: '+e.message, false); }
+    btn.textContent='📥 Excelファイルを出力する'; btn.disabled=false;
+  }, 80);
+}
+
+async function doGenerate(){
+  const nm = g('name'), kna = g('kana'), addr = g('addr');
+  const appAddr = g('aAddr')||addr, appName = g('aName')||nm;
+  const items = [1,2,3].map(i => ({
+    type:g(`i${i}t`), name:g(`i${i}n`), maker:g(`i${i}mk`),
+    seller:g(`i${i}sl`), biznum:g(`i${i}bn`), price:g(`i${i}p`),
+    y:gi(`i${i}y`), m:gi(`i${i}m`), d:gi(`i${i}d`),
+    reason: getReason(i)
+  }));
+  const hist = [1,2,3,4,5,6].map(i => ({
+    date:g(`h${i}dt`), price:g(`h${i}pr`), name:g(`h${i}nm`)
+  }));
+
+  const zip = await JSZip.loadAsync(OFFICIAL_TEMPLATE_B64, {base64:true});
+  const sheetPath = 'xl/worksheets/sheet1.xml';
+  const sheetFile = zip.file(sheetPath);
+  if (!sheetFile) throw new Error('様式ファイルの読み込みに失敗しました');
+  let xml = await sheetFile.async('string');
+
+  const set = (ref,val) => { xml = setCellInXml(xml, ref, val); };
+  const digits = (str,row,max) => { xml = digitsToCells(xml, str, row, max); };
+
+  // 個人番号（任意・A3:Q4）
+  if (g('myNum')) set('A3', fmt12(g('myNum')));
+  // 被保険者番号（10桁・R3〜AA3の1マス1桁）
+  digits(g('insNum'), 3, 10);
+  // 被保険者名前・フリガナ（A6:フリガナ／A7:氏名）
+  set('A6', kna);
+  set('A7', nm);
+  // 生年月日（R6:AA7）
+  const by=gi('bY'), bm=gi('bM'), bd=gi('bD');
+  if (by&&bm&&bd) set('R6', `${by}年${bm}月${bd}日`);
+  // 被保険者住所（A9:AA10）
+  set('A9', addr);
+
+  // 品目1〜3（各6行1ブロック：13/19/25行目始まり）
+  // 非表示（未追加）の品目ブロックはデフォルト値が残っていても出力しない
+  [13,19,25].forEach((base,idx) => {
+    if (idx+1 > visibleItemCount) return;
+    const it = items[idx];
+    const bizRow = base+3;
+    if (it.type) set(`C${base+1}`, it.type);         // 種目名
+    if (it.maker) set(`K${base+1}`, it.maker);        // 製造事業者名
+    if (it.name) set(`C${base+3}`, it.name);          // 商品名
+    if (it.seller) set(`K${base+3}`, it.seller);      // 販売事業者名
+    if (it.price) set(`R${base}`, `${fmtN(it.price)}円`); // 購入金額
+    if (it.biznum) digits(it.biznum, bizRow, 10);     // 事業所番号（1マス1桁）
+    if (it.y&&it.m&&it.d) set(`W${base}`, `${it.y}年${it.m}月${it.d}日`); // 購入日
+    if (it.reason) set(`C${base+5}`, it.reason);      // 福祉用具が必要な理由
+  });
+
+  // 申請日（A34）
+  const aY=gi('aY'), aM=gi('aM'), aD=gi('aD');
+  if (aY&&aM&&aD) set('A34', `　${aY}年　${aM}月　${aD}日`);
+  // 申請者（委任者）住所・名前・電話番号
+  set('H35', appAddr);
+  set('H37', appName);
+  if (g('aPhone')) set('R37', fmtPhoneField('電話番号', g('aPhone')));
+  // 受任者　住所・事業所名称・担当者・代表者名・電話番号
+  set('I39', g('dAddr'));
+  set('I40', g('dBiz'));
+  if (g('dStaff')) set('T40', `(担当者）　${g('dStaff')}`);
+  set('I41', g('dRep'));
+  if (g('dPhone')) set('T41', fmtPhoneField('(電話番号）', g('dPhone')));
+
+  // 過去購入履歴（56〜61行目）
+  hist.forEach((h,i)=>{
+    const row = 56+i;
+    if (h.date) set(`A${row}`, h.date);
+    if (h.price) set(`I${row}`, `${fmtN(h.price)}円`);
+    if (h.name) set(`P${row}`, h.name);
+  });
+
+  zip.file(sheetPath, xml);
+  const blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const today = new Date();
+  const ymd = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `福祉用具購入費支給申請書_${nm}_${ymd}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+}
+
+// ============================================================
+// 商品パンフレット資料の出力
+// 「購入した福祉用具の全景、規模、内容等が記載されたパンフレット等」の添付書類として、
+// プリセット選択時に登録した写真URL・商品ページURLなどをもとに、印刷用の資料ページを生成する。
+// ============================================================
+function generatePamphlet(){
+  const nm = g('name') || '（未入力）';
+  const rows = [];
+  for (let n=1; n<=visibleItemCount; n++){
+    const data = selectedItemData[n];
+    const type = g(`i${n}t`), name = g(`i${n}n`), maker = g(`i${n}mk`), price = g(`i${n}p`);
+    if (!name && !type) continue;
+    const imageUrl = data && data.imageUrl ? data.imageUrl : '';
+    const productUrl = data && data.productUrl ? data.productUrl : '';
+    const imgHtml = imageUrl
+      ? `<img src="${xmlEscape(imageUrl)}" alt="${xmlEscape(name)}" onerror="this.outerHTML='<div class=&quot;noimg&quot;>写真未登録<br>（メーカーサイト参照）</div>'">`
+      : `<div class="noimg">写真未登録<br>（メーカーサイト参照）</div>`;
+    rows.push(`
+      <div class="item">
+        ${imgHtml}
+        <div class="info">
+          <b>${n}. ${xmlEscape(name || '（商品名未入力）')}</b>
+          <div class="row">種目：${xmlEscape(type||'－')}</div>
+          <div class="row">製造事業者：${xmlEscape(maker||'－')}</div>
+          <div class="row">参考価格：${price?fmtN(price)+'円':'－'}</div>
+          ${productUrl ? `<div class="row"><a href="${xmlEscape(productUrl)}" target="_blank" rel="noopener">メーカー商品ページを見る ↗</a></div>` : ''}
+        </div>
+      </div>`);
+  }
+  if (!rows.length){
+    toast('⚠ 品目が選択されていません。先に福祉用具を選択してください', false);
+    return;
+  }
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日`;
+  const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<title>福祉用具パンフレット資料_${xmlEscape(nm)}</title>
+<style>
+  body{font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;margin:24px;color:#222;}
+  h1{font-size:17px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:4px;}
+  .sub{font-size:12px;color:#666;margin-bottom:18px;}
+  .item{display:flex;gap:16px;border:1px solid #ccc;border-radius:8px;padding:16px;margin-bottom:16px;page-break-inside:avoid;}
+  .item img{width:160px;height:160px;object-fit:contain;border:1px solid #eee;border-radius:6px;background:#fafafa;flex-shrink:0;}
+  .noimg{width:160px;height:160px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#fafafa;border:1px dashed #ccc;border-radius:6px;color:#999;font-size:11px;text-align:center;line-height:1.5;}
+  .info b{font-size:15px;}
+  .info .row{margin:5px 0;font-size:13px;}
+  .info a{color:#2563eb;}
+  .foot{font-size:11px;color:#999;margin-top:20px;}
+  .printbar{margin-bottom:18px;}
+  .printbar button{font-size:13px;padding:8px 16px;border-radius:6px;border:1px solid #888;background:#f5f5f5;cursor:pointer;}
+  @media print { .printbar{display:none;} body{margin:10mm;} }
+</style></head>
+<body>
+<div class="printbar"><button onclick="window.print()">🖨 この資料を印刷する</button></div>
+<h1>福祉用具パンフレット資料（購入した福祉用具の内容がわかる資料）</h1>
+<div class="sub">申請者：${xmlEscape(nm)} 様　　作成日：${dateStr}</div>
+${rows.join('\n')}
+<div class="foot">※本資料はメーカー公開情報をもとに自動生成した参考資料です。内容をご確認のうえ、必要に応じてメーカーサイトの正式なカタログ・パンフレットと併せて申請書に添付してください。</div>
+</body></html>`;
+  const blob = new Blob([html], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
+
+// ============================================================
+// 初期化
+// ============================================================
+buildItems();
+[1,2,3].forEach(setTodayOnItemDate);
+loadApiKeyUI();
+attachAllDateSpinners();
+</script>
+</body>
+</html>
