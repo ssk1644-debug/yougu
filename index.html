@@ -402,11 +402,9 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
         </div>
         </div>
         <div class="f s2">
-          <label>導入時サイン（利用者・代理人様）<span class="note">※iPadなどでこの枠内に指やペンでサインしてください。ご高齢のお客様でも書きやすいよう、枠いっぱいに大きくサインできます。適合確認シートの「利用者（代理人）様」欄にそのまま反映され、紙に出さず保存できます</span></label>
-          <div style="border:1px solid var(--border);border-radius:7px;overflow:hidden;background:#fff;touch-action:none;">
-            <canvas id="signaturePad" width="900" height="260" style="width:100%;height:260px;display:block;cursor:crosshair;"></canvas>
-          </div>
-          <button type="button" class="btn bg" style="padding:6px 10px;min-width:auto;margin-top:6px;font-size:12px;" onclick="clearSignaturePad()">🗑 サインをクリア</button>
+          <label>導入時サイン（利用者・代理人様）</label>
+          <div class="note" id="reviewSignatureStatus">※サインは「適合確認シート確認ページ」でお客様に直接ご入力いただきます（未サイン）</div>
+          <button type="button" class="btn bp" style="padding:8px 12px;min-width:auto;margin-top:6px;" onclick="openConfirmReviewPage()">✅ 適合確認シート確認ページを開く（レビュー・サイン・出力）</button>
         </div>
       </div>
       <div class="note" style="margin-top:8px;">※インボイス登録番号・振込先はアスポートの登録情報です。実際にご使用の前に金額の大きい書類（請求書・領収証）は必ず内容をご確認ください。</div>
@@ -455,6 +453,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
   <button class="btn bg" onclick="clearForm()">🗑 クリア</button>
   <button class="btn bg" id="saveCaseBtn" onclick="saveCurrentCase()">💾 この案件を保存/更新</button>
   <button class="btn bg" id="pamphletBtn" onclick="generatePamphlet()">🖼 商品パンフレット資料を出力</button>
+  <button class="btn bp" id="reviewPageBtn" onclick="openConfirmReviewPage()">✅ 適合確認シート確認ページ（レビュー・サイン・出力）</button>
   <button class="btn bg" id="invoiceBtn" onclick="generateInvoice()">🧾 納品・請求書を出力</button>
   <button class="btn bg" id="conformityBtn" onclick="generateConformitySheet()">📋 適合確認シートを出力</button>
   <button class="btn bg" id="savePdfBtn" onclick="saveConformityPdfToCase()">📄 適合確認シートをPDF保存（案件に添付）</button>
@@ -1812,6 +1811,35 @@ window.addEventListener('message', (e) => {
     setCatalogMarks_(e.data.n, e.data.marks);
     if (e.source) e.source.postMessage({ type: 'asport-catalog-crop-ack', reqId: e.data.reqId }, '*');
     refreshPopupContent_(e.source);
+  } else if (e.data.type === 'asport-review-signature-confirm' && typeof e.data.dataUrl === 'string'){
+    // 「適合確認シート確認ページ」でお客様がその場でサインし確定した内容を反映する
+    setSignatureFromDataUrl(e.data.dataUrl);
+    if (e.source) e.source.postMessage({ type: 'asport-review-ack', reqId: e.data.reqId }, '*');
+  } else if (e.data.type === 'asport-review-signature-paper'){
+    // 「紙にサインをもらう」が選択された場合：サイン欄は空欄のまま（従来通り、紙運用のお客様に対応）
+    setSignatureFromDataUrl('');
+    if (e.source) e.source.postMessage({ type: 'asport-review-ack', reqId: e.data.reqId }, '*');
+  } else if (e.data.type === 'asport-review-generate' && typeof e.data.which === 'string'){
+    // 確認ページの出力ボタンから、本体側の既存の出力機能をそのまま呼び出す
+    const which = e.data.which;
+    const reqId = e.data.reqId;
+    const source = e.source;
+    (async () => {
+      try {
+        if (which === 'conformity') {
+          await generateConformitySheet();
+        } else if (which === 'invoice_receipt') {
+          await generateInvoice();
+          await generateReceipt();
+        } else if (which === 'application') {
+          await generateExcel();
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (source) source.postMessage({ type: 'asport-review-ack', reqId }, '*');
+      }
+    })();
   }
 });
 
@@ -2664,6 +2692,10 @@ async function buildPamphletHtml_(){
     .catalog-mark-panel{display:none !important;}
     .mark-draw-layer{display:none !important;}
     .photo-mode-toggle{display:none !important;}
+    /* AI/自動検出に関する注意書き（※AIまたは登録済み座標による自動切り抜きです…等）は、
+       スタッフが画面上で内容を確認する際の補助的な注記であり、確認・提出の最終責任は
+       人が持つべきものなので、提出用の印刷物には含めない */
+    .catalog-crop-hint{display:none !important;}
     body{margin:10mm;}
   }
 </style></head>
@@ -3481,6 +3513,346 @@ async function saveConformityPdfToCase(){
 }
 
 // ============================================================
+// 適合確認シート確認ページ（レビュー→サイン→出力を1つの画面にまとめたポップアップ）
+// ============================================================
+// 適合確認シートの実際の記載内容（buildConformityZipBlob()がxlsxへ書き込むのと同じ項目・同じ
+// 判定ロジック）を、確認ページで見た目そのまま表示できる形のデータとして集める（読み取りのみ）
+function buildConfirmReviewData_(){
+  const items = collectInvoiceItems();
+  const custName = g('name') || '（未入力）';
+  const dStaffValue = getDStaffValue();
+  const explainStaffValue = getStaffValue('cfExplainStaff','cfExplainStaffOther') || dStaffValue;
+  const checkStaffValue = getStaffValue('cfCheckStaff','cfCheckStaffOther') || dStaffValue;
+  const dAddr = g('dAddr'), dPhone = g('dPhone');
+  const cfY = gi('cfY'), cfM = gi('cfM'), cfD = gi('cfD');
+  const ckY = gi('ckY'), ckM = gi('ckM'), ckD = gi('ckD');
+  const tdY = gi('tdY'), tdM = gi('tdM'), tdD = gi('tdD');
+  const tdMethod = g('tdMethod');
+  const tdOk = document.getElementById('tdOk').checked;
+  const tdReExplain = document.getElementById('tdReExplain').checked;
+  const tdReAdjust = document.getElementById('tdReAdjust').checked;
+  const tdChange = document.getElementById('tdChange').checked;
+  const tdComment = g('tdComment');
+  const installDate = items[0] ? (items[0].dateStr || '') : '';
+  const [instY,instM,instD] = installDate ? installDate.split('/').map(v=>parseInt(v,10)) : [0,0,0];
+  const reiwa = (y) => y ? (y - 2018) : '';
+  const fmtDate = (y,m,d) => (y&&m&&d) ? `令和${reiwa(y)}年${m}月${d}日` : '（未入力）';
+  const purchasedTypes = new Set(items.map(it => it.type));
+  const has = (label) => purchasedTypes.has(label);
+  return {
+    custName, dStaffValue, explainStaffValue, checkStaffValue, dAddr, dPhone,
+    cfDateStr: fmtDate(cfY,cfM,cfD),
+    ckDateStr: fmtDate(ckY,ckM,ckD),
+    installDateStr: fmtDate(instY,instM,instD),
+    tdDateStr: (tdY&&tdM&&tdD) ? (fmtDate(tdY,tdM,tdD) + (tdMethod ? `　(${tdMethod})` : '')) : '（未入力）',
+    tdOk, tdReExplain, tdReAdjust, tdChange,
+    tdComment: tdComment || '（未入力）',
+    // 貸与・購入の品目チェックはbuildConformityZipBlob()のH14〜Y22セル判定と同じ組み合わせ
+    itemsLent: [
+      ['車いす', has('車いす')], ['車いす付属品', has('車いす付属品')],
+      ['特殊寝台', has('特殊寝台')], ['特殊寝台付属品', has('特殊寝台付属品')],
+      ['床ずれ予防用具', has('床ずれ予防用具')], ['体位変換器', has('体位変換器')],
+      ['手すり', has('手すり')], ['認知症老人徘徊感知機器', has('認知症老人徘徊感知機器')],
+      ['移動用リフト', has('移動用リフト')], ['自動排泄処理装置', has('自動排泄処理装置')]
+    ],
+    itemsPurchased: [
+      ['腰掛便座', has('腰掛便座')], ['入浴補助用具', has('入浴補助用具')],
+      ['スロープ', has('スロープ')||has('固定用スロープ')], ['歩行器', has('歩行器')],
+      ['歩行補助つえ', has('歩行補助つえ')||has('歩行補助杖')], ['排泄支援予測機器', has('排泄支援予測機器')],
+      ['簡易浴槽', has('簡易浴槽')], ['自動排泄処理装置の交換可能部品', has('自動排泄処理装置の交換可能部品')],
+      ['移動用リフトのつり具部分', has('移動用リフトのつり具部分')]
+    ],
+    // H27〜H32の適合説明チェック項目（H31のみbuildConformityZipBlob側で常時falseの既存仕様）
+    explainChecks: [
+      ['導入福祉用具が身体状況に適合', true],
+      ['導入福祉用具が利用環境に適合', true],
+      ['実際に福祉用具を用いながら使用方法を説明いたしました。', true],
+      ['福祉用具の保守、事故防止のための利用上の注意事項を説明いたしました。', true],
+      ['取扱説明書をお渡しいたしました。', true],
+      ['介護ベッドに係る事故の危険性及び対応策等の説明をいたしました。', false],
+      ['選択制（貸与・販売）対象の福祉用具の提供について説明いたしました。', true]
+    ],
+    signatureDataUrl: reviewSignatureDataUrl
+  };
+}
+
+// 確認ページ（別ウィンドウ）のHTML全体を組み立てる。実際の適合確認シートの記載内容を
+// そのまま画面上に再現し、お客様がその場で内容を確認してからサインできるようにする。
+// サイン確定・紙運用選択・各種出力ボタンは、pamphletのポップアップと同じpostMessageハンドシェイク
+// （opener側の'asport-review-*'リスナーで処理、asport-review-ackで応答）で本体側とやり取りする。
+function buildConfirmReviewHtml_(data){
+  const chip = (label, checked) => `<span class="rv-chip${checked ? ' on' : ''}">${checked ? '☑' : '□'} ${escHtml(label)}</span>`;
+  const lentChips = data.itemsLent.map(([l,c]) => chip(l,c)).join('');
+  const purchasedChips = data.itemsPurchased.map(([l,c]) => chip(l,c)).join('');
+  const explainLines = data.explainChecks.map(([l,c]) => `<div class="rv-checkline">${c?'☑':'□'} ${escHtml(l)}</div>`).join('');
+  const tdResultChips = [
+    ['問題なし', data.tdOk], ['再説明', data.tdReExplain], ['再調整', data.tdReAdjust], ['変更提案', data.tdChange]
+  ].map(([l,c]) => chip(l,c)).join('');
+  // サイン画像はscriptタグの中にJSONとして埋め込む（閉じタグ文字列を含み得るdata URLへの対策で`<`は<へ変換）
+  const initDataJson = JSON.stringify({ signatureDataUrl: data.signatureDataUrl || '' }).replace(/</g, '\\u003c');
+
+  const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<title>適合確認シート確認ページ - ${escHtml(data.custName)}様</title>
+<style>
+  :root{--border:#d8d8d8;--accent:#1a6b4a;}
+  *{box-sizing:border-box;}
+  body{font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;margin:0;padding:24px;background:#f4f6f5;color:#222;}
+  .rv-wrap{max-width:760px;margin:0 auto;}
+  .rv-head{margin-bottom:16px;}
+  .rv-head h1{font-size:20px;margin:0 0 4px;}
+  .rv-head .sub{color:#666;font-size:13px;}
+  .rv-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
+  .rv-sec-title{font-weight:bold;font-size:14px;border-left:4px solid var(--accent);padding-left:8px;margin:0 0 10px;}
+  .rv-row{display:flex;flex-wrap:wrap;gap:8px 24px;margin-bottom:6px;font-size:14px;align-items:baseline;}
+  .rv-row .lbl{color:#666;min-width:100px;}
+  .rv-row .val{font-weight:bold;}
+  .rv-chips{display:flex;flex-wrap:wrap;gap:6px 10px;margin:6px 0 12px;}
+  .rv-chip{font-size:12px;padding:3px 8px;border-radius:12px;border:1px solid #ccc;color:#999;background:#f7f7f7;}
+  .rv-chip.on{color:#1a1a1a;border-color:var(--accent);background:#e8f5ee;font-weight:bold;}
+  .rv-checkline{font-size:13px;padding:2px 0;}
+  .rv-comment{white-space:pre-wrap;background:#fafafa;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;margin-top:4px;}
+  .rv-sig-frame{border:1px solid var(--border);border-radius:7px;overflow:hidden;}
+  .rv-sig-frame canvas{width:100%;height:260px;display:block;background:#fff;touch-action:none;cursor:crosshair;}
+  .rv-sig-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}
+  .rv-btn{padding:9px 14px;border-radius:7px;border:1px solid var(--border);background:#fff;cursor:pointer;font-size:13px;}
+  .rv-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:bold;}
+  .rv-btn:disabled{opacity:.45;cursor:not-allowed;}
+  .rv-note{font-size:12px;color:#888;margin-top:6px;}
+  .rv-confirmed{display:none;font-weight:bold;color:var(--accent);padding:10px 0;}
+  .rv-out-grid{display:flex;flex-wrap:wrap;gap:10px;}
+  .rv-out-grid .rv-btn{flex:1;min-width:200px;}
+  .rv-disclaimer{font-size:12px;color:#999;text-align:center;margin-top:10px;}
+</style>
+</head>
+<body>
+<div class="rv-wrap">
+  <div class="rv-head">
+    <h1>✅ 適合確認シート確認ページ</h1>
+    <div class="sub">${escHtml(data.custName)} 様 － 内容をご確認のうえ、サインをお願いいたします</div>
+  </div>
+
+  <div class="rv-card">
+    <div class="rv-sec-title">基本情報</div>
+    <div class="rv-row"><span class="lbl">氏名</span><span class="val">${escHtml(data.custName)}</span></div>
+    <div class="rv-row"><span class="lbl">作成日</span><span class="val">${escHtml(data.cfDateStr)}</span><span class="lbl">担当</span><span class="val">${escHtml(data.dStaffValue)}</span></div>
+  </div>
+
+  <div class="rv-card">
+    <div class="rv-sec-title">対象の福祉用具（種目）</div>
+    <div class="rv-row"><span class="lbl">福祉用具貸与</span></div>
+    <div class="rv-chips">${lentChips}</div>
+    <div class="rv-row"><span class="lbl">特定福祉用具購入</span></div>
+    <div class="rv-chips">${purchasedChips}</div>
+  </div>
+
+  <div class="rv-card">
+    <div class="rv-sec-title">点検・導入・適合確認</div>
+    <div class="rv-row"><span class="lbl">使用前点検日</span><span class="val">${escHtml(data.ckDateStr)}</span></div>
+    <div class="rv-row"><span class="lbl">導入日</span><span class="val">${escHtml(data.installDateStr)}</span></div>
+    ${explainLines}
+    <div class="rv-row" style="margin-top:8px;"><span class="lbl">説明担当者</span><span class="val">${escHtml(data.explainStaffValue)}</span></div>
+  </div>
+
+  <div class="rv-card">
+    <div class="rv-sec-title">導入10日後の確認事項</div>
+    <div class="rv-row"><span class="lbl">確認者</span><span class="val">${escHtml(data.checkStaffValue)}</span></div>
+    <div class="rv-row"><span class="lbl">確認日</span><span class="val">${escHtml(data.tdDateStr)}</span></div>
+    <div class="rv-chips">${tdResultChips}</div>
+    <div class="rv-sec-title" style="margin-top:12px;font-size:13px;">専門相談員による総合確認の結果</div>
+    <div class="rv-comment">${escHtml(data.tdComment)}</div>
+  </div>
+
+  <div class="rv-card">
+    <div class="rv-sec-title">アスポート（受任者）</div>
+    <div class="rv-row"><span class="lbl">担当</span><span class="val">${escHtml(data.dStaffValue)}</span></div>
+    <div class="rv-row"><span class="lbl">住所</span><span class="val">${escHtml(data.dAddr)}</span></div>
+    <div class="rv-row"><span class="lbl">電話</span><span class="val">${escHtml(data.dPhone)}</span></div>
+  </div>
+
+  <div class="rv-card">
+    <div class="rv-sec-title">導入時サイン（利用者・代理人様）</div>
+    <div id="sigPendingNote">
+      <div class="rv-note">※上記の内容にお間違いがなければ、枠内にサインしてください。紙にサインをもらう場合は「紙にサインをもらう」を選択してください。</div>
+      <div id="sigPadWrap" class="rv-sig-frame"><canvas id="sigCanvas" width="900" height="260"></canvas></div>
+      <div id="sigActions" class="rv-sig-actions">
+        <button type="button" class="rv-btn" id="sigClearBtn">🗑 サインをクリア</button>
+        <button type="button" class="rv-btn primary" id="sigConfirmBtn">🖊 このサインで確定する</button>
+        <button type="button" class="rv-btn" id="sigPaperBtn">📝 紙にサインをもらう（電子署名なし）</button>
+      </div>
+    </div>
+    <div id="sigConfirmedNote" class="rv-confirmed"></div>
+    <button type="button" class="rv-btn" id="resignBtn" style="display:none;">🔄 サインをやり直す</button>
+  </div>
+
+  <div class="rv-card">
+    <div class="rv-sec-title">出力</div>
+    <div id="outNote" class="rv-note">※サイン確定後（または「紙にサインをもらう」選択後）に出力できます。</div>
+    <div class="rv-out-grid">
+      <button type="button" class="rv-btn primary review-out-btn" data-which="conformity" disabled>📋 適合確認シートを出力</button>
+      <button type="button" class="rv-btn primary review-out-btn" data-which="invoice_receipt" disabled>🧾 請求書・領収証を出力</button>
+      <button type="button" class="rv-btn primary review-out-btn" data-which="application" disabled>📄 申請書一式を出力</button>
+    </div>
+    <div class="rv-disclaimer">出力される書類の内容確認・提出の最終確認は、担当スタッフが行ってください。</div>
+  </div>
+</div>
+<script>window.__reviewData = ${initDataJson};<\/script>
+<script>
+(function(){
+  var canvas = document.getElementById('sigCanvas');
+  var ctx = canvas.getContext('2d');
+  ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1a1a1a';
+  var drawing = false, lastX = 0, lastY = 0, hasDrawing = false;
+
+  function posFromEvent(e){
+    var rect = canvas.getBoundingClientRect();
+    var scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  }
+  function start(e){
+    e.preventDefault();
+    drawing = true;
+    var p = posFromEvent(e);
+    lastX = p.x; lastY = p.y;
+    if (canvas.setPointerCapture && e.pointerId != null) canvas.setPointerCapture(e.pointerId);
+  }
+  function move(e){
+    if (!drawing) return;
+    e.preventDefault();
+    var p = posFromEvent(e);
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    lastX = p.x; lastY = p.y;
+    hasDrawing = true;
+  }
+  function end(){ drawing = false; }
+  canvas.addEventListener('pointerdown', start);
+  canvas.addEventListener('pointermove', move);
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointerleave', end);
+  canvas.addEventListener('pointercancel', end);
+
+  function clearCanvas(){ ctx.clearRect(0, 0, canvas.width, canvas.height); hasDrawing = false; }
+
+  var reqSeq = 0;
+  function sendToOpener(msg){
+    return new Promise(function(resolve){
+      var reqId = 'r' + (++reqSeq) + '_' + Date.now();
+      msg.reqId = reqId;
+      var done = false;
+      function onAck(e){
+        if (done) return;
+        if (e.data && e.data.type === 'asport-review-ack' && e.data.reqId === reqId){
+          done = true;
+          window.removeEventListener('message', onAck);
+          resolve(e.data);
+        }
+      }
+      window.addEventListener('message', onAck);
+      window.opener.postMessage(msg, '*');
+      setTimeout(function(){
+        if (done) return;
+        done = true;
+        window.removeEventListener('message', onAck);
+        resolve(null);
+      }, 8000);
+    });
+  }
+
+  function setOutputEnabled(enabled){
+    var btns = document.querySelectorAll('.review-out-btn');
+    for (var i = 0; i < btns.length; i++) btns[i].disabled = !enabled;
+    document.getElementById('outNote').style.display = enabled ? 'none' : '';
+  }
+
+  function setConfirmed(confirmed, mode){
+    document.getElementById('sigPendingNote').style.display = confirmed ? 'none' : '';
+    var note = document.getElementById('sigConfirmedNote');
+    if (confirmed){
+      note.style.display = 'block';
+      note.textContent = (mode === 'paper')
+        ? '📝 紙にサインをもらう運用を選択しました（このシートのサイン欄は空欄のまま出力されます）'
+        : '✅ サインを保存しました';
+    } else {
+      note.style.display = 'none';
+      note.textContent = '';
+    }
+    document.getElementById('resignBtn').style.display = confirmed ? '' : 'none';
+    setOutputEnabled(confirmed);
+  }
+
+  document.getElementById('sigClearBtn').addEventListener('click', clearCanvas);
+
+  document.getElementById('sigConfirmBtn').addEventListener('click', function(){
+    if (!hasDrawing){ alert('サインが入力されていません。枠内にサインしてから確定してください。'); return; }
+    var dataUrl = canvas.toDataURL('image/png');
+    sendToOpener({ type: 'asport-review-signature-confirm', dataUrl: dataUrl }).then(function(){
+      setConfirmed(true, 'digital');
+    });
+  });
+
+  document.getElementById('sigPaperBtn').addEventListener('click', function(){
+    if (!confirm('紙にサインをもらう運用にします。この確認ページのサイン欄は空欄のまま出力します。よろしいですか？')) return;
+    sendToOpener({ type: 'asport-review-signature-paper' }).then(function(){
+      setConfirmed(true, 'paper');
+    });
+  });
+
+  document.getElementById('resignBtn').addEventListener('click', function(){
+    clearCanvas();
+    setConfirmed(false);
+  });
+
+  var outBtns = document.querySelectorAll('.review-out-btn');
+  for (var i = 0; i < outBtns.length; i++){
+    outBtns[i].addEventListener('click', function(){
+      var btn = this;
+      var which = btn.getAttribute('data-which');
+      var origText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '⏳ 出力中...';
+      sendToOpener({ type: 'asport-review-generate', which: which }).then(function(){
+        btn.disabled = false;
+        btn.textContent = origText;
+      });
+    });
+  }
+
+  var initData = window.__reviewData || {};
+  if (initData.signatureDataUrl){
+    var img = new Image();
+    img.onload = function(){
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      hasDrawing = true;
+      setConfirmed(true, 'digital');
+    };
+    img.src = initData.signatureDataUrl;
+  } else {
+    setConfirmed(false);
+  }
+})();
+<\/script>
+</body></html>`;
+  return html;
+}
+
+// 「適合確認シート確認ページ」を新しいウィンドウで開く（レビュー→サイン→出力を1つの画面にまとめた導線）
+function openConfirmReviewPage(){
+  if (!collectInvoiceItems().length){
+    toast('⚠ 品目が選択されていません。先に福祉用具を選択してください', false);
+    return;
+  }
+  const data = buildConfirmReviewData_();
+  const html = buildConfirmReviewHtml_(data);
+  const blob = new Blob([html], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
+
+// ============================================================
 // 領収証の出力
 // ============================================================
 const RECEIPT_LOGO_B64 = "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";
@@ -4028,78 +4400,36 @@ function applyTdCommentSuggestion(i){
 
 // ============================================================
 // 導入時サイン（署名パッド）
-// iPad等のタッチ・ペン・マウスいずれもPointer Eventsで統一的に扱う。
-// 描いた内容はPNGのdataURLとしてcanvasから取得し、案件保存時はformDataの
-// 一部として（signatureDataUrlキーで）別途保存・復元する。
+// サインの実際の入力は「適合確認シート確認ページ」（別ウィンドウ、buildConfirmReviewHtml_参照）で
+// 行う。iPad等のタッチ・ペン・マウスいずれもPointer Eventsで統一的に扱う描画処理は、
+// そのポップアップ側のスクリプトに実装されている（メイン画面にはcanvasを置かない）。
+// 確認ページで確定したPNGのdataURLはpostMessage経由でこちら（オープナー側）に送られ、
+// reviewSignatureDataUrlに保持する。案件保存時はformDataの一部として
+// （従来と同じsignatureDataUrlキーで）別途保存・復元する。
 // 適合確認シート出力時は、これをxlsxの「利用者（代理人）様」欄(O32:T35)に
 // 画像として動的に埋め込む（JSZipでxl/media・drawing1.xml・関連リレーションを追加）。
 // ============================================================
-let signatureHasDrawing = false;
-function initSignaturePad(){
-  const canvas = document.getElementById('signaturePad');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  ctx.lineWidth = 2.5;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#1a1a1a';
-  let drawing = false;
-  let lastX = 0, lastY = 0;
-  const posFromEvent = (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
-  };
-  const start = (e) => {
-    e.preventDefault();
-    drawing = true;
-    const p = posFromEvent(e);
-    lastX = p.x; lastY = p.y;
-    canvas.setPointerCapture && e.pointerId != null && canvas.setPointerCapture(e.pointerId);
-  };
-  const move = (e) => {
-    if (!drawing) return;
-    e.preventDefault();
-    const p = posFromEvent(e);
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    lastX = p.x; lastY = p.y;
-    signatureHasDrawing = true;
-  };
-  const end = (e) => { drawing = false; };
-  canvas.addEventListener('pointerdown', start);
-  canvas.addEventListener('pointermove', move);
-  canvas.addEventListener('pointerup', end);
-  canvas.addEventListener('pointerleave', end);
-  canvas.addEventListener('pointercancel', end);
-}
-function clearSignaturePad(){
-  const canvas = document.getElementById('signaturePad');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  signatureHasDrawing = false;
-}
-// 現在のサインをPNGのdataURLで返す（未記入なら空文字）
+let reviewSignatureDataUrl = '';
+// 現在のサインをPNGのdataURLで返す（未サインなら空文字）
 function getSignatureDataUrl(){
-  if (!signatureHasDrawing) return '';
-  const canvas = document.getElementById('signaturePad');
-  if (!canvas) return '';
-  return canvas.toDataURL('image/png');
+  return reviewSignatureDataUrl;
 }
-// 保存済みのサイン（dataURL）をcanvasに描き戻す（案件読み込み時）
+// 保存済みのサイン（dataURL）を復元する（案件読み込み時）。空文字なら未サイン状態にする
 function setSignatureFromDataUrl(dataUrl){
-  clearSignaturePad();
-  if (!dataUrl) return;
-  const canvas = document.getElementById('signaturePad');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const img = new Image();
-  img.onload = () => { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); signatureHasDrawing = true; };
-  img.src = dataUrl;
+  reviewSignatureDataUrl = dataUrl || '';
+  updateReviewSignatureStatusUI();
+}
+// 基本画面の「クリア」ボタン等から呼ばれる、サイン取り消し
+function clearSignaturePad(){
+  setSignatureFromDataUrl('');
+}
+// 基本画面のサイン状態表示（確認ページを開く前の目印）を更新する
+function updateReviewSignatureStatusUI(){
+  const el = document.getElementById('reviewSignatureStatus');
+  if (!el) return;
+  el.textContent = reviewSignatureDataUrl
+    ? '※サイン済みです（「適合確認シート確認ページ」で入力済み）'
+    : '※サインは「適合確認シート確認ページ」でお客様に直接ご入力いただきます（未サイン）';
 }
 
 // ============================================================
@@ -4111,7 +4441,7 @@ loadApiKeyUI();
 loadGasUrlUI();
 ensureCatalogFixesLoaded_(); // 案件管理システムURLが設定済みなら、カタログ補正の共有データを先読みしておく
 attachAllDateSpinners();
-initSignaturePad();
+updateReviewSignatureStatusUI();
 // ①欄の品目1の導入日を入力・変更したタイミングで、10日後確認日を自動計算する
 // （ユーザーが10日後確認日を直接編集するまでは、導入日側の変更に追従して再計算し続ける）
 ['i1y','i1m','i1d'].forEach(id => {
