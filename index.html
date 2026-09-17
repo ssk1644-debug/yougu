@@ -2585,26 +2585,30 @@ async function buildPamphletHtml_(){
 <html lang="ja"><head><meta charset="UTF-8">
 <title>福祉用具パンフレット資料_${xmlEscape(nm)}</title>
 <style>
-  body{font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;color:#222;max-width:800px;margin:24px auto;}
+  body{font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;margin:24px;color:#222;}
   h1{font-size:17px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:4px;}
   .sub{font-size:12px;color:#666;margin-bottom:18px;}
-  /* 紙の節約のため、切り抜き済み（AI検出・手動クロップ）でコンパクトな品目は最大3列に並べ、
-     1品目でA4 1枚を使い切ってしまわないようにする。ページ全体表示が必要な品目（スロープの
-     価格一覧表等）はitem-wrap-wideクラスで全列分の幅を使う単独行として表示する */
-  .pamphlet-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start;}
-  .pamphlet-grid .item-wrap-wide{grid-column:1 / -1;}
+  /* 画面上での枠指定・マーカー付け作業はこれまで通り大きく余裕を持って行えるようにし、
+     紙の節約のための3列コンパクト表示は「印刷する」を押した瞬間だけ適用する
+     （body.print-compactクラスをbeforeprint/afterprintで付け外しし、この配下でのみ
+     グリッド化・画像縮小を行う。@media printではなくJSでのクラス切替にしているのは、
+     切り抜き画像の実ピクセルサイズはJS(applyCatalogCrops)がcontainer.clientWidthを
+     読んで都度計算しており、@media printのタイミングだけでは正しい幅で再計算されない
+     ため。作業中の画面表示には一切影響しない） */
   .item{display:flex;gap:16px;border:1px solid #ccc;border-radius:8px;padding:16px;margin-bottom:16px;page-break-inside:avoid;}
-  .item-wrap:not(.item-wrap-wide) .item{flex-direction:column;padding:10px;gap:8px;}
   .item-photo{flex-shrink:0;}
   .item img{width:160px;height:160px;object-fit:contain;border:1px solid #eee;border-radius:6px;background:#fafafa;flex-shrink:0;}
   .noimg{width:160px;height:160px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#fafafa;border:1px dashed #ccc;border-radius:6px;color:#999;font-size:11px;text-align:center;line-height:1.5;}
-  .item-wrap:not(.item-wrap-wide) .item img,
-  .item-wrap:not(.item-wrap-wide) .noimg{width:100%;height:100px;}
-  .item-wrap:not(.item-wrap-wide) .info b{font-size:13px;}
-  .item-wrap:not(.item-wrap-wide) .info .row{font-size:11px;margin:3px 0;}
   .info b{font-size:15px;}
   .info .row{margin:5px 0;font-size:13px;}
   .info a{color:#2563eb;}
+  body.print-compact .pamphlet-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start;}
+  body.print-compact .pamphlet-grid .item-wrap-wide{grid-column:1 / -1;}
+  body.print-compact .item-wrap:not(.item-wrap-wide) .item{flex-direction:column;padding:10px;gap:8px;}
+  body.print-compact .item-wrap:not(.item-wrap-wide) .item img,
+  body.print-compact .item-wrap:not(.item-wrap-wide) .noimg{width:100%;height:100px;}
+  body.print-compact .item-wrap:not(.item-wrap-wide) .info b{font-size:13px;}
+  body.print-compact .item-wrap:not(.item-wrap-wide) .info .row{font-size:11px;margin:3px 0;}
   .photo-mode-toggle{margin-top:2px;}
   .photo-mode-group{display:inline-flex;border:1px solid #bbb;border-radius:6px;overflow:hidden;}
   .photo-mode-btn{font-size:11px;padding:5px 10px;border:none;border-right:1px solid #bbb;background:#fff;color:#555;cursor:pointer;}
@@ -2613,8 +2617,10 @@ async function buildPamphletHtml_(){
   .photo-mode-btn.active{background:#2563eb;color:#fff;}
   .catalog-page-block{border:1px solid #ccc;border-radius:8px;padding:12px;margin-bottom:16px;page-break-inside:avoid;}
   .catalog-page-label{font-size:12px;font-weight:700;color:#444;margin-bottom:8px;}
-  .catalog-page-img{width:100%;max-width:100%;max-height:230mm;display:block;border:1px solid #eee;border-radius:4px;margin-bottom:8px;}
-  .catalog-crop-container{position:relative;overflow:hidden;width:100%;max-width:100%;border:1px solid #eee;border-radius:4px;background:#fafafa;}
+  .catalog-page-img{width:100%;max-width:720px;max-height:230mm;display:block;border:1px solid #eee;border-radius:4px;margin-bottom:8px;}
+  .catalog-crop-container{position:relative;overflow:hidden;width:100%;max-width:520px;border:1px solid #eee;border-radius:4px;background:#fafafa;}
+  body.print-compact .catalog-page-img,
+  body.print-compact .catalog-crop-container{max-width:100%;}
   .catalog-crop-img{position:absolute;top:0;left:0;max-width:none;}
   .catalog-crop-mark{position:absolute;border:3px solid #e11d48;border-radius:4px;box-shadow:0 0 0 9999px rgba(255,255,255,0.55);pointer-events:none;}
   .catalog-crop-mark::after{content:"対象商品";position:absolute;top:-20px;left:-3px;background:#e11d48;color:#fff;font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap;}
@@ -3021,10 +3027,10 @@ function applyCatalogCrops(){
       const availW = container.clientWidth;
       const cropWpx = img.naturalWidth * (crop.wPct / 100);
       const cropHpx = img.naturalHeight * (crop.hPct / 100);
-      // 紙の節約のため1ページに2〜3品目を並べる関係上、幅は元々.pamphlet-gridの列幅
-      // （3列、200px台）に収まるが、縦長のクロップ範囲まで幅基準で拡大されると高さが
-      // かさんでしまうため、高さにも控えめな上限を設ける
-      const MAX_DISP_H = 420;
+      // 画面での作業中は従来通り大きく表示（最大820px）。「印刷する」を押した瞬間だけ
+      // body.print-compactが付き、.pamphlet-gridが3列になるのに合わせて上限も控えめにする
+      // （3列では幅基準で自動的に縮小されるが、縦長のクロップ範囲だけ高さがかさむのを防ぐ安全弁）
+      const MAX_DISP_H = document.body.classList.contains('print-compact') ? 420 : 820;
       let scale = availW / cropWpx;
       if (cropHpx * scale > MAX_DISP_H) scale = MAX_DISP_H / cropHpx;
       const dispW = cropWpx * scale;
@@ -3093,6 +3099,18 @@ function applyCatalogCrops(){
 }
 applyCatalogCrops();
 window.addEventListener('resize', applyCatalogCrops);
+// 画面での枠指定・マーカー付け作業はこれまで通り大きな表示のまま行えるようにし、
+// 「この資料を印刷する」を押した瞬間（およびブラウザの印刷ダイアログ・印刷プレビューを
+// 開いた瞬間）だけ紙を節約するコンパクト3列表示に切り替える。印刷が終わって
+// ダイアログを閉じたら（キャンセルした場合も含め）画面表示を元の大きさに戻す
+window.addEventListener('beforeprint', () => {
+  document.body.classList.add('print-compact');
+  applyCatalogCrops();
+});
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('print-compact');
+  applyCatalogCrops();
+});
 <\/script>
 </body></html>`;
   return html;
