@@ -117,6 +117,10 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
 .htbl input{border:none;border-radius:5px;padding:7px 9px;font-size:13px;background:transparent;}
 .htbl tr:nth-child(even) td{background:#fafaf8;}
 .htbl input:focus{background:#fff;border:1px solid var(--accent2);}
+.status-badge{display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap;}
+.status-btns{display:flex;flex-direction:column;gap:4px;margin-top:6px;}
+.status-btns .btn{padding:5px 8px;min-width:auto;font-size:11px;white-space:nowrap;}
+.status-done-note{font-size:11px;color:#15803d;font-weight:600;margin-top:6px;}
 
 /* Actions */
 .actions{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid var(--border);padding:14px 20px;display:flex;gap:10px;justify-content:center;box-shadow:0 -4px 20px rgba(0,0,0,.1);z-index:50;}
@@ -187,7 +191,6 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
     <div class="sb">
       <div class="f s2" style="flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap;">
         <input type="text" id="caseListSearch" placeholder="お客様名で絞り込み" oninput="renderCaseList()" style="max-width:240px;">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;"><input type="checkbox" id="caseListShowDone" onchange="renderCaseList()" style="width:auto;">入金確認済みも表示</label>
         <button class="btn bg" style="padding:8px 16px;min-width:auto;" onclick="refreshCaseList()">🔄 更新</button>
         <span id="caseListStatus" class="note"></span>
       </div>
@@ -904,12 +907,44 @@ function customerRemainingLimit(customerName, fiscalYear, excludeCaseId){
   return { used: sum, remaining: 100000 - sum, found: true };
 }
 
+// 旧・進捗ステータス（5段階）→ 新・進捗ステータス（商品手配→納品→入金→市役所提出→受理→完了）への
+// 自動移行マップ。2026-09-17の進捗フロー刷新に伴い、既存案件を極力近い新ステータスへ機械的に変換する
+// （書類作成済み→商品手配中・在庫ありは「発注不要で手配済み」を仮定した最善の対応付けであり、
+// 実際に発注待ちだった案件は一覧の「◀ 戻す」で商品手配中（発注中・在庫ナシ）へ戻すなど、
+// 必要に応じてスタッフが手動で補正する想定）
+const OLD_STATUS_MIGRATION = {
+  "入力中": "入力中",
+  "書類作成済み": "商品手配中（在庫あり）",
+  "市役所提出済み": "市役所提出",
+  "顧客対応済み": "市役所受理",
+  "入金確認済み": "完了"
+};
+
+async function migrateOldCaseStatuses_(){
+  const toMigrate = caseListCache.filter(c =>
+    Object.prototype.hasOwnProperty.call(OLD_STATUS_MIGRATION, c.status) && OLD_STATUS_MIGRATION[c.status] !== c.status
+  );
+  if (!toMigrate.length) return;
+  for (const c of toMigrate){
+    const newStatus = OLD_STATUS_MIGRATION[c.status];
+    try {
+      await gasPost("save", { case: { caseId: c.caseId, status: newStatus } });
+      c.status = newStatus;
+      c.updatedAt = new Date().toISOString();
+    } catch(err){
+      console.warn("進捗状況の自動移行に失敗しました：", c.caseId, err.message);
+    }
+  }
+  toast(`✅ ${toMigrate.length}件の案件を新しい進捗ステータスへ自動的に移行しました（内容をご確認ください）`);
+}
+
 async function refreshCaseList(){
   const statusEl = document.getElementById("caseListStatus");
   if (statusEl) statusEl.textContent = "読み込み中...";
   try{
     const data = await gasFetch("list");
     caseListCache = data.cases || [];
+    await migrateOldCaseStatuses_();
     renderCaseList();
     if (statusEl) statusEl.textContent = `${caseListCache.length}件`;
   } catch(err){
@@ -963,15 +998,61 @@ function deleteCatalogFix_(d){
     .catch(err => console.warn("カタログ補正の共有取り消しに失敗しました:", err.message));
 }
 
-const CASE_STATUS_OPTIONS = ["入力中","書類作成済み","市役所提出済み","顧客対応済み","入金確認済み"];
+// 進捗状況フロー（2026-09-17刷新）：[stated]「商品手配（商品あり、ナシ）→納品→入金済み→
+// 市役所提出→市役所受理→完了」という実際の業務の流れに沿って作り直したもの。旧来の
+// プルダウン選択（5段階、書類作成中心）から、「次へ進める」ボタンで順番に進める方式へ変更した。
+// 商品手配の直後（＝入力中の次）だけは「商品あり／ナシ」で行き先が分岐する特別な分岐点で、
+// それ以外は常に1本道（nextStatusOptions参照）。完了は他と違って自動で一覧から隠さない
+// （[stated] 常に一覧に表示、との指示）
+const STATUS_FLOW = [
+  { key: "入力中", label: "入力中", color: "#78716c" },
+  { key: "商品手配中（発注中・在庫ナシ）", label: "商品手配中（発注中・在庫ナシ）", color: "#c2410c" },
+  { key: "商品手配中（在庫あり）", label: "商品手配中（在庫あり）", color: "#b45309" },
+  { key: "納品", label: "納品", color: "#0369a1" },
+  { key: "入金済み", label: "入金済み", color: "#0e7490" },
+  { key: "市役所提出", label: "市役所提出", color: "#6d28d9" },
+  { key: "市役所受理", label: "市役所受理", color: "#7c3aed" },
+  { key: "完了", label: "完了", color: "#15803d" }
+];
+const STATUS_INDEX = new Map(STATUS_FLOW.map((s,i) => [s.key, i]));
+
+// 現在のステータスから押せる「次へ進める」ボタンの一覧を返す（通常は1つ、入力中の直後だけ2つに分岐）
+function nextStatusOptions(status){
+  if (!STATUS_INDEX.has(status)){
+    // 未知の値（旧ステータスの移行漏れ等）は安全側として入力中と同じ扱いにする
+    status = "入力中";
+  }
+  if (status === "入力中"){
+    return [
+      { label: "⏩ 次へ（商品あり・すぐ手配可）", to: "商品手配中（在庫あり）" },
+      { label: "⏩ 次へ（商品ナシ・発注が必要）", to: "商品手配中（発注中・在庫ナシ）" }
+    ];
+  }
+  const idx = STATUS_INDEX.get(status);
+  if (idx >= STATUS_FLOW.length - 1) return []; // 完了より先はない
+  return [{ label: `⏩ 次へ（${STATUS_FLOW[idx+1].label}）`, to: STATUS_FLOW[idx+1].key }];
+}
+
+// 「◀ 戻す」で一つ前のステータスに戻す（誤操作の訂正用。商品あり／ナシの分岐を経由した場合でも
+// 一律で1つ前の段階に戻す簡易的な実装で、案件ごとの経路までは記録していない）
+function prevStatusOf(status){
+  if (!STATUS_INDEX.has(status)) return null;
+  const idx = STATUS_INDEX.get(status);
+  if (idx <= 0) return null;
+  return STATUS_FLOW[idx-1].key;
+}
+
+function statusBadgeHtml(status){
+  const info = STATUS_FLOW.find(s => s.key === status);
+  if (!info) return `<span class="status-badge" style="background:#eee;color:#666;border:1px solid #ccc;">${xmlEscape(status || "（未設定）")}</span>`;
+  return `<span class="status-badge" style="background:${info.color}1a;color:${info.color};border:1px solid ${info.color}66;">${xmlEscape(info.label)}</span>`;
+}
 
 function renderCaseList(){
   const tbody = document.getElementById("caseListBody");
   if (!tbody) return;
-  const showDone = document.getElementById("caseListShowDone")?.checked;
   const q = g("caseListSearch");
   const rows = caseListCache
-    .filter(c => showDone || c.status !== "入金確認済み")
     .filter(c => !q || (c.customerName||"").includes(q))
     .sort((a,b) => (b.updatedAt||"").localeCompare(a.updatedAt||""));
   if (!rows.length){
@@ -987,7 +1068,13 @@ function renderCaseList(){
         ? `${fy}年度：残り￥${fmtN(lim.remaining)}`
         : `${fy}年度：超過￥${fmtN(-lim.remaining)}`;
     }
-    const statusOpts = CASE_STATUS_OPTIONS.map(s => `<option value="${s}" ${s===c.status?"selected":""}>${s}</option>`).join("");
+    const nextOpts = nextStatusOptions(c.status);
+    const prev = prevStatusOf(c.status);
+    const btns = [
+      ...nextOpts.map(opt => `<button type="button" class="btn bg" onclick="updateCaseStatus('${c.caseId}','${opt.to}')">${opt.label}</button>`),
+      prev ? `<button type="button" class="btn bg" onclick="updateCaseStatus('${c.caseId}','${prev}')" title="一つ前の状態に戻す">◀ 戻す</button>` : ""
+    ].join("");
+    const doneNote = c.status === "完了" ? `<div class="status-done-note">✅ 完了</div>` : "";
     const pdfCell = c.pdfUrl
       ? `<a href="${xmlEscape(c.pdfUrl)}" target="_blank" rel="noopener">📄 開く</a>`
       : `<span style="color:#aaa;font-size:12px;">未保存</span>`;
@@ -997,7 +1084,7 @@ function renderCaseList(){
       <td>${xmlEscape(c.itemSummary||"")}</td>
       <td style="text-align:right;">￥${fmtN(c.purchaseAmount||0)}</td>
       <td style="font-size:12px;">${limText}</td>
-      <td><select onchange="updateCaseStatus('${c.caseId}', this.value)" style="padding:4px;">${statusOpts}</select></td>
+      <td>${statusBadgeHtml(c.status)}${doneNote}<div class="status-btns">${btns}</div></td>
       <td style="text-align:center;">${pdfCell}</td>
       <td><button class="btn bg" style="padding:5px 10px;min-width:auto;font-size:12px;" onclick="loadCaseById('${c.caseId}')">📂 読み込む</button></td>
     </tr>`;
@@ -1016,7 +1103,7 @@ async function updateCaseStatus(caseId, newStatus){
     toast("✅ 進捗状況を更新しました");
   } catch(err){
     toast("❌ 更新に失敗しました：" + err.message, false);
-    renderCaseList(); // セレクトの表示を元に戻す
+    renderCaseList(); // 表示を元の状態に戻す
   }
 }
 
