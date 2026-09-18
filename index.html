@@ -2400,6 +2400,110 @@ function digitsToCells(xml, digitsStr, row, maxLen){
   return xml;
 }
 
+// ============================================================
+// xlsxの書式（styles.xml の xf）操作
+// 様式ファイル側のセルは「左寄せ」で作られているものがあり、氏名などを差し込むと
+// 枠の左端にべったり寄ってしまう。既存のxfを直接書き換えると、同じ書式IDを共有する
+// 他のセルまで一緒に変わってしまうため、元のxfを複製して配置だけ変えた新しいxfを
+// 追加し、対象のセルだけがそれを参照するようにする（罫線・フォント等は元のまま）。
+// ============================================================
+function getCellStyleId_(xml, ref){
+  const m = xml.match(new RegExp('<c r="' + ref + '"([^>]*?)(?:/>|>[\\s\\S]*?</c>)'));
+  if (!m) return null;
+  const s = (m[1]||'').match(/\ss="(\d+)"/);
+  return s ? parseInt(s[1],10) : 0;
+}
+function setCellStyleInXml_(xml, ref, styleIndex){
+  const re = new RegExp('<c r="' + ref + '"([^>]*?)(?:/>|>[\\s\\S]*?</c>)');
+  const m = xml.match(re);
+  if (!m) return xml;
+  const cell = /\ss="\d+"/.test(m[0])
+    ? m[0].replace(/\ss="\d+"/, ` s="${styleIndex}"`)
+    : m[0].replace(/<c r="[^"]+"/, h => `${h} s="${styleIndex}"`);
+  return xml.replace(m[0], cell);
+}
+// baseXfIndex のxfを複製し、水平配置だけ horizontal に変えたxfを末尾に追加してその番号を返す
+function addAlignedXf_(stylesXml, baseXfIndex, horizontal){
+  const m = stylesXml.match(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/);
+  if (!m) return null;
+  const body = m[2];
+  const xfs = body.match(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g) || [];
+  const base = xfs[baseXfIndex];
+  if (!base) return null;
+  let neo = base;
+  if (/<alignment\b[^>]*\/>/.test(neo)){
+    neo = neo.replace(/<alignment\b([^>]*)\/>/, (all, attrs) =>
+      `<alignment horizontal="${horizontal}"${attrs.replace(/\shorizontal="[^"]*"/,'')}/>`);
+  } else if (/\/>\s*$/.test(neo)){
+    neo = neo.replace(/\/>\s*$/, `><alignment horizontal="${horizontal}" vertical="center"/></xf>`);
+  } else {
+    neo = neo.replace(/<\/xf>\s*$/, `<alignment horizontal="${horizontal}" vertical="center"/></xf>`);
+  }
+  if (!/applyAlignment="1"/.test(neo)) neo = neo.replace(/^<xf\b/, '<xf applyAlignment="1"');
+  return { xml: stylesXml.replace(m[0], `<cellXfs count="${xfs.length+1}">${body}${neo}</cellXfs>`), index: xfs.length };
+}
+// 指定セルを中央揃えにする（元の書式は保持）。baseRefを指定すると、そのセルの書式を複製して使う
+async function centerCellsInSheet_(zip, xml, refs, baseRef){
+  const stylesFile = zip.file('xl/styles.xml');
+  if (!stylesFile) return xml;
+  let stylesXml = await stylesFile.async('string');
+  const cache = {};
+  for (const ref of refs){
+    const baseId = getCellStyleId_(xml, baseRef || ref);
+    if (baseId === null) continue;
+    if (cache[baseId] === undefined){
+      const r = addAlignedXf_(stylesXml, baseId, 'center');
+      if (!r) continue;
+      stylesXml = r.xml;
+      cache[baseId] = r.index;
+    }
+    xml = setCellStyleInXml_(xml, ref, cache[baseId]);
+  }
+  zip.file('xl/styles.xml', stylesXml);
+  return xml;
+}
+
+// 納品・請求書の明細テーブル（12〜21行／B〜AE列）は、様式ファイル側で一部のセルだけ罫線の
+// 設定が異なっており、隣り合う細線が重なって太く見えたり、逆に横線が欠けたりしていた。
+// 品名行（12,14,16,18,20）とメーカー名行（13,15,17,19,21）のそれぞれについて、列ごとに
+// 「多数派の書式ID」を求め、そこから外れているセルだけを多数派の書式に揃える。
+// 値は書き換えず、書式IDの差し替えだけを行う。
+function normalizeInvoiceTableBorders_(xml){
+  const colIndex = (c) => { let n=0; for (let i=0;i<c.length;i++) n = n*26 + (c.charCodeAt(i)-64); return n; };
+  const MINC = colIndex('B'), MAXC = colIndex('AE');
+  const groups = [[12,14,16,18,20], [13,15,17,19,21]];
+  for (const rows of groups){
+    const styleOf = {};
+    for (const r of rows){
+      const rm = xml.match(new RegExp('<row r="' + r + '"[^>]*>([\\s\\S]*?)</row>'));
+      if (!rm) continue;
+      const re = /<c r="([A-Z]+)(\d+)"([^>]*?)(?:\/>|>[\s\S]*?<\/c>)/g;
+      let m;
+      while ((m = re.exec(rm[1])) !== null){
+        const ci = colIndex(m[1]);
+        if (ci < MINC || ci > MAXC) continue;
+        const s = (m[3]||'').match(/\ss="(\d+)"/);
+        (styleOf[m[1]] = styleOf[m[1]] || {})[r] = s ? parseInt(s[1],10) : 0;
+      }
+    }
+    for (const col of Object.keys(styleOf)){
+      const counts = {};
+      for (const r of rows){
+        const v = styleOf[col][r];
+        if (v !== undefined) counts[v] = (counts[v]||0) + 1;
+      }
+      let mode = null, best = 0;
+      for (const k of Object.keys(counts)){ if (counts[k] > best){ best = counts[k]; mode = parseInt(k,10); } }
+      if (mode === null || best < 2) continue; // 多数派が定まらない列は触らない
+      for (const r of rows){
+        const v = styleOf[col][r];
+        if (v !== undefined && v !== mode) xml = setCellStyleInXml_(xml, col + r, mode);
+      }
+    }
+  }
+  return xml;
+}
+
 // "084-971-8882" のようなハイフン区切りの電話番号を、様式の「電話番号（　）－」欄に合わせて整形する。
 function fmtPhoneField(label, phone){
   if (!phone) return '';
@@ -2498,6 +2602,10 @@ async function doGenerate(){
     if (h.price) set(`I${row}`, `${fmtN(h.price)}円`);
     if (h.name) set(`P${row}`, h.name);
   });
+
+  // フリガナ（A6:Q6）・氏名（A7:Q7）は結合セルの中央に配置する。
+  // 様式の元の書式が左寄せのため、そのままだと枠の左端にべったり寄ってしまう
+  xml = await centerCellsInSheet_(zip, xml, ['A6','A7']);
 
   zip.file(sheetPath, xml);
   const blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -3375,6 +3483,9 @@ async function generateInvoice(){
       });
     });
 
+    // 明細テーブルの罫線の不揃い（二重線で太く見える／横線が欠ける）を整える
+    xml = normalizeInvoiceTableBorders_(xml);
+
     zip.file(sheetPath, xml);
     const blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const url = URL.createObjectURL(blob);
@@ -3441,7 +3552,11 @@ async function buildConformityZipBlob(){
       clr('AA5'); clr('AB5'); clr('AD5'); clr('AF5'); clr('AH5');
     }
     set('Z6', dStaffValue);
-    set('H10', custName); // 氏名欄は3行の箱(row9-11)の中央行(H10)に配置し、上下均等な余白で縦中央にする
+    // 氏名欄は3行の箱(row9-11)の中央行(row10)に配置し、上下均等な余白で縦中央にする。
+    // 横方向は、ラベル箱(B9:G11)の右端=H列から「様」のあるY列の手前=X列までが記入スペースなので、
+    // その中央にあたるP列へ中央揃えで書き込む（結合すると長い氏名が切れてしまうため結合はしない。
+    // 中央揃えなら左右どちらにもはみ出して表示できる）
+    set('P10', custName);
 
     // 福祉用具貸与：スロープ・歩行器・歩行補助つえは2024年の選択制対象品目のため
     // 貸与欄・購入欄の両方に掲載されているが、本ツールは購入費支給申請書用であり
@@ -3493,6 +3608,9 @@ async function buildConformityZipBlob(){
     set('Y49', dStaffValue);
     set('Y50', dAddr);
     set('Y51', dPhone);
+
+    // 氏名（P10）を中央揃えにする。書式は元の氏名セル(H10、24pt)を複製して使う
+    xml = await centerCellsInSheet_(zip, xml, ['P10'], 'H10');
 
     zip.file(sheetPath, xml);
 
@@ -3978,8 +4096,9 @@ function generateReceipt(){
   let leading = true;
   const boxesHtml = labels.map((lbl,i)=>{
     let d = digits[i];
-    if (d === '0' && leading && i < 7){ d = ''; } else { leading = false; }
-    return `<div class="abox"><div class="adig">${d}</div><div class="albl">${lbl}</div></div>`;
+    let blank = false;
+    if (d === '0' && leading && i < 7){ d = ''; blank = true; } else { leading = false; }
+    return `<div class="abox${blank ? ' blank' : ''}"><div class="adig">${d}</div><div class="albl">${lbl}</div></div>`;
   }).join('');
 
   const stampNote = payAmount >= 50000
@@ -3990,7 +4109,7 @@ function generateReceipt(){
     ? `但し　<b>${desc}</b>　代金として（保険給付対象費用の${ratio}割負担分＋支給限度額超過分）上記正に領収いたしました。`
     : `但し　<b>${desc}</b>　代金として（保険給付対象費用の${ratio}割負担分）上記正に領収いたしました。`;
 
-  const copyBody = (copyLabel, badgeClass) => `
+  const copyBody = (copyLabel, badgeClass, showStampGuide) => `
     <div class="frame">
       <div class="wmtile"></div>
       ${copyLabel ? `<div class="badgerow"><span class="badge ${badgeClass}">${copyLabel}</span></div>` : ''}
@@ -3998,11 +4117,10 @@ function generateReceipt(){
         <div class="recno"><img class="logo" src="data:image/jpeg;base64,${RECEIPT_LOGO_B64}" alt="ASPORT"><div>No. ${xmlEscape(receiptNo)}</div></div>
         <div class="titlewrap">
           <h1>領収証</h1>
-          <div class="sub">福祉用具購入費申請済（受領委任払）</div>
         </div>
         <div class="meta">${iy}年${im}月${id}日</div>
       </div>
-      <div class="cust">${xmlEscape(custName)} 様</div>
+      <div class="custband"><span class="cnm">${xmlEscape(custName)}</span><span class="sama">様</span></div>
       <div class="amtwrap">
         <span class="yen">￥</span>
         <div class="amtboxes">${boxesHtml}</div>
@@ -4022,15 +4140,17 @@ function generateReceipt(){
       <div class="foot">
         <div class="stamparea">収入印紙</div>
         <div class="comp" style="flex:1;">
-          <span class="cn">株式会社アスポート</span><br>
-          〒720-0055　福山市胡町4-14<br>
-          〒721-0945　福山市引野町南1-18-25<br>
-          TEL：${xmlEscape(dPhone)}<br>
-          インボイス登録番号：${xmlEscape(regNo)}<br>
-          介護保険事業所番号：3471500771<br>
-          担当：${xmlEscape(dStaffValue)}
+          <div class="cn">株式会社アスポート</div>
+          <div class="compgrid">
+            <div>〒720-0055　福山市胡町4-14</div>
+            <div>TEL：${xmlEscape(dPhone)}</div>
+            <div>〒721-0945　福山市引野町南1-18-25</div>
+            <div>インボイス登録番号：${xmlEscape(regNo)}</div>
+            <div>介護保険事業所番号：3471500771</div>
+            <div>担当：${xmlEscape(dStaffValue)}</div>
+          </div>
         </div>
-        <div class="hanko">印</div>
+        ${showStampGuide ? `<div class="stampguide"><span>受付印</span></div>` : ''}
       </div>
     </div>`;
 
@@ -4038,8 +4158,12 @@ function generateReceipt(){
 <html lang="ja"><head><meta charset="UTF-8">
 <title>領収証_${xmlEscape(custName)}</title>
 <style>
+  /* 本体画面と同じNoto Sans JPを読み込む（このポップアップは別ドキュメントのため個別に指定が必要）。
+     オフライン時はヒラギノ／游ゴシックMediumにフォールバックする。
+     太字一辺倒・広すぎる字間の「古い伝票」感を避け、中間ウエイト＋控えめな字間で今風にする */
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
   *{box-sizing:border-box;}
-  body{font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;margin:14px;color:#222;font-size:12px;background:#f4f4f2;}
+  body{font-family:'Noto Sans JP','Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic Medium','Yu Gothic','Meiryo',sans-serif;margin:14px;color:#1f2328;font-size:12px;background:#f4f4f2;-webkit-font-smoothing:antialiased;}
   .printbar{margin-bottom:18px;}
   .printbar button{font-size:13px;padding:8px 16px;border-radius:6px;border:1px solid #888;background:#f5f5f5;cursor:pointer;}
   .page{max-width:210mm;margin:0 auto;background:#fff;padding:6mm;}
@@ -4051,21 +4175,25 @@ function generateReceipt(){
   .badge{display:inline-block;white-space:nowrap;line-height:16px;font-size:12px;font-weight:700;letter-spacing:2px;padding:4px 10px;border:2px solid #333;border-radius:4px;background:#fff;transform:rotate(3deg);}
   .badge.cust{color:#1a5c1a;border-color:#1a5c1a;}
   .badge.city{color:#8a3b00;border-color:#8a3b00;}
-  .wmtile{position:absolute;inset:0;background-image:url(data:image/jpeg;base64,${RECEIPT_ICON_B64});background-repeat:repeat;background-size:64px 79px;opacity:0.045;pointer-events:none;}
+  .wmtile{position:absolute;inset:0;background-image:url(data:image/jpeg;base64,${RECEIPT_ICON_B64});background-repeat:repeat;background-size:64px 79px;opacity:0.12;pointer-events:none;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
   .head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;}
   .titlewrap{text-align:center;flex:1;}
-  .titlewrap h1{font-size:21px;letter-spacing:6px;margin:0 0 3px;}
-  .titlewrap .sub{font-size:11px;color:#555;}
+  /* フォントが読み込めた環境／できなかった環境で高さが変わり、切り取り線の位置がズレることを
+     防ぐため、大きな文字（タイトル・氏名）は行高・ボックス高を固定する */
+  .titlewrap h1{font-size:26px;font-weight:500;letter-spacing:4px;text-indent:4px;margin:0 0 3px;line-height:35px;}
   .recno{font-size:11px;}
   .recno .logo{height:16px;display:block;margin-bottom:3px;}
   .meta{font-size:11px;text-align:right;}
-  .cust{font-size:22px;font-weight:700;margin:6px 0 3px;border-bottom:2px solid #333;padding-bottom:3px;}
+  .custband{background:#f5f6f7;border-left:4px solid #3c4450;height:54px;padding:7px 20px 8px;margin:5px 0 3px;display:flex;align-items:baseline;overflow:hidden;}
+  .custband .cnm{font-size:28px;font-weight:500;letter-spacing:0.04em;}
+  .custband .sama{font-size:14px;font-weight:400;margin-left:14px;color:#555;}
   .amtwrap{display:flex;align-items:center;gap:2px;margin:5px 0;}
   .amtwrap .yen:last-child{margin-left:12px;}
   .amtboxes{display:flex;}
-  .abox{width:28px;border:1px solid #333;border-right:none;text-align:center;}
-  .abox:last-child{border-right:1px solid #333;}
-  .adig{height:26px;line-height:26px;font-size:15px;font-weight:700;border-bottom:1px solid #999;}
+  .abox{width:28px;border:1.4px solid #000;border-right:none;text-align:center;}
+  .abox:last-child{border-right:1.4px solid #000;}
+  .adig{position:relative;height:26px;line-height:26px;font-size:15px;font-weight:700;border-bottom:1px solid #999;}
+  .abox.blank .adig::before{content:'';position:absolute;left:18%;right:18%;top:50%;border-top:1.6px solid #333;transform:rotate(-55deg);transform-origin:center;}
   .albl{font-size:8.5px;color:#666;height:13px;line-height:13px;}
   .yen{font-size:17px;font-weight:700;}
   .desc{font-size:11px;margin:4px 0;}
@@ -4083,9 +4211,10 @@ function generateReceipt(){
   .stampnote{font-size:9.5px;color:#666;margin:3px 0;}
   .stamparea{display:inline-block;border:1px dashed #999;width:48px;height:48px;text-align:center;font-size:9px;color:#999;line-height:48px;vertical-align:top;margin-right:14px;}
   .foot{display:flex;justify-content:space-between;align-items:flex-end;margin-top:5px;}
-  .comp{font-size:10px;line-height:1.4;}
-  .comp .cn{font-size:13px;font-weight:700;}
-  .hanko{width:46px;height:46px;border:1px solid #999;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;color:#999;flex-shrink:0;}
+  .comp{font-size:10.5px;line-height:1.5;color:#3a3f45;}
+  .comp .cn{font-size:18px;font-weight:500;letter-spacing:0.02em;color:#1f2328;margin-bottom:3px;}
+  .compgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;}
+  .stampguide{width:26mm;height:26mm;flex-shrink:0;margin-left:8px;display:flex;align-items:center;justify-content:center;border:1.6px dashed #888;border-radius:50%;font-size:9.5px;color:#999;letter-spacing:2px;}
   .cutline{display:flex;align-items:center;gap:10px;margin:2.5mm 0;color:#888;font-size:11px;user-select:none;}
   .cutline::before,.cutline::after{content:'';flex:1;border-top:1px dashed #999;}
   @media print {
@@ -4100,9 +4229,9 @@ function generateReceipt(){
 <body>
 <div class="printbar"><button onclick="window.print()">🖨 この資料を印刷する（お客様用・市役所用を1枚に印刷）</button></div>
 <div class="page">
-  ${copyBody('お客様用', 'cust')}
+  ${copyBody('お客様用', 'cust', false)}
   <div class="cutline">✂　この線で切り取ってください　✂</div>
-  ${copyBody('', '')}
+  ${copyBody('', '', true)}
 </div>
 </body></html>`;
   const blob = new Blob([html], {type:'text/html'});
