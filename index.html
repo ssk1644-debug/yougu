@@ -107,6 +107,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
 .tag-kw button{white-space:nowrap;font-size:12px;font-weight:600;padding:7px 14px;border:none;background:var(--accent);color:#fff;border-radius:7px;cursor:pointer;flex-shrink:0;}
 .tag-kw button:hover{background:var(--accent-dark);}
 .reason-preview{margin-top:10px;background:#fffef7;border:1px solid #e5e0c4;border-radius:7px;padding:10px 14px;font-size:13px;color:var(--text);line-height:1.6;min-height:44px;white-space:pre-wrap;}
+.reason-warn{margin-top:8px;background:#fff4f4;border:1px solid #f0bcbc;border-radius:7px;padding:8px 12px;font-size:12.5px;color:#a33;line-height:1.6;}
 .reason-preview.empty{color:var(--muted);font-style:italic;}
 .reason-edit-btn{font-size:11px;color:var(--accent);border:none;background:none;cursor:pointer;margin-top:4px;padding:0;text-decoration:underline;}
 
@@ -762,33 +763,60 @@ PRESETS.bath.items[5].catalogCode = '470783';
 // ============================================================
 // 理由タグデータ
 // ============================================================
+// 保険者（市町村）は「その人の心身の状況・住環境にその用具が適合しているか」を理由欄で確認する。
+// 「〜なので必要である」だけの記載は、心身状況が確認できないため不十分とされる（大阪市の記入
+// ガイドでも『被保険者は移動用リフトが必要である』は×例として挙げられている）。
+// そのため理由文は【疾患・既往】→【身体機能の状況】→【具体的にどの動作がどう困難か】→
+// 【住環境の要因】→【用具による効果】の順で構成する。kindは文の組み立てに使う分類。
 const TAG_GROUPS = [
   {
-    label: '身体状況',
+    label: '疾患・既往', kind: 'disease',
     tags: [
-      '下肢筋力低下', '上肢筋力低下', '体幹バランス低下', '麻痺（片麻痺）', '麻痺（両麻痺）',
-      '関節拘縮', '骨折後', '術後', '疼痛あり', '起立困難', '歩行困難', '立位不安定',
-      '座位保持困難', 'めまい・ふらつきあり', '視力低下', '認知症'
+      '変形性膝関節症', '変形性股関節症', '腰部脊柱管狭窄症', '圧迫骨折後', '大腿骨頸部骨折後',
+      '脳血管障害後遺症', 'パーキンソン病', '関節リウマチ', '骨粗鬆症', '心疾患',
+      '呼吸器疾患', '認知症', '廃用症候群', '下肢切断後'
     ]
   },
   {
-    label: '日常動作への影響',
+    label: '身体機能の状況', kind: 'body',
     tags: [
-      '入浴動作困難', '洗身困難', '浴槽への移乗困難', '浴槽内での立ち座り困難',
-      'トイレ動作困難', '便座からの立ち座り困難', '屋内移動困難', '屋外移動困難',
-      '起居動作困難', '移乗困難'
+      '下肢筋力低下', '上肢筋力低下', '体幹バランス低下', '右片麻痺', '左片麻痺',
+      '膝の関節可動域制限', '股関節の可動域制限', '腰部の疼痛', '膝の疼痛', '関節拘縮',
+      '立位保持の不安定', '座位保持の困難', 'ふらつき・めまい', '易疲労・息切れ',
+      '視力低下', '術後の体力低下'
     ]
   },
   {
-    label: '使用目的・効果',
+    label: '困難な動作（具体的に）', kind: 'act',
     tags: [
-      '安全な入浴を可能にする', '自立した入浴動作を支援する', '転倒リスクを軽減する',
-      '安全なトイレ動作を可能にする', '自立したトイレ動作を支援する',
-      '安全な移動を可能にする', '歩行の安定を図る', '介護者の負担を軽減する',
-      '自立生活を維持する'
+      '浴槽への出入り', '浴槽内での立ち座り', '洗い場での立ち座り', '洗身動作',
+      '便座からの立ち上がり', '夜間のトイレへの移動', '屋内の移動', '屋外の移動',
+      '段差の昇降', '起き上がり・立ち上がり', 'ベッド・車いすへの移乗', '階段の昇降'
+    ]
+  },
+  {
+    label: '住環境の要因', kind: 'env',
+    tags: [
+      '洗い場と浴槽の高低差が大きい', '浴槽が深い', '洗い場が狭い', '浴室に手すりがない',
+      '浴室床が滑りやすい', 'トイレまでの距離が長い', '和式トイレである', 'トイレが狭い',
+      '玄関に段差がある', '屋内に敷居の段差がある', '屋外にスロープがない', '階段に手すりがない'
+    ]
+  },
+  {
+    label: '用具による効果', kind: 'effect',
+    tags: [
+      '転倒の危険を防ぐ', '安全に入浴できる', '入浴動作の自立を維持する',
+      '安全に排泄できる', '排泄の自立を維持する', '膝・腰への負担を軽減する',
+      '移動の安全性を確保する', '歩行の安定を図る', '介護者の負担を軽減する',
+      '在宅生活の継続を図る'
     ]
   }
 ];
+// kind別にタグ配列を引く
+function tagsOfKind_(kind){
+  const g = TAG_GROUPS.find(x => x.kind === kind);
+  return g ? g.tags : [];
+}
 
 // ============================================================
 // 書類から自動入力（Claude API）
@@ -1572,6 +1600,7 @@ function buildItems() {
         <!-- 理由タグセクション -->
         <div style="margin-top:16px;">
           <label style="display:block;margin-bottom:8px;">福祉用具が必要な理由${opt?'':' <span class="req">*</span>'}</label>
+          <div class="note" style="margin-bottom:8px;">保険者は「その方の心身の状況・住まいにその用具が合っているか」をこの欄で確認します。<b>疾患・既往／身体機能の状況</b>を必ず入れ、<b>どの動作がどう困難か</b>まで具体的に書いてください（「必要である」だけの記載は不可）。商品カード選択時の初期タグは下書きです。必ずご本人の状態に合わせて直してください。</div>
           <div class="tag-area" id="tagarea${n}"></div>
 
           <!-- キーワード追加 -->
@@ -1584,6 +1613,7 @@ function buildItems() {
           <div style="margin-top:10px;">
             <label style="display:block;margin-bottom:4px;">生成された理由文</label>
             <div class="reason-preview empty" id="preview${n}">タグを選択すると理由文が自動生成されます</div>
+            <div id="reasonWarn${n}" class="reason-warn" style="display:none;">⚠ 身体状況が入っていません。「疾患・既往」または「身体機能の状況」から、その方の状態に当てはまるものを選んでください。</div>
             <button class="reason-edit-btn" onclick="toggleEdit(${n})">✏️ 直接編集する</button>
             <textarea id="i${n}r" style="display:none;margin-top:6px;" placeholder="理由を直接入力する場合はここに記入してください"></textarea>
           </div>
@@ -1939,38 +1969,36 @@ document.addEventListener('click', (e) => {
   });
 });
 
+// 品目ごとの初期タグ。保険者は「心身の状況に適合しているか」を理由欄で見るため、
+// どの品目でも必ず身体機能の状況（body）が1つ以上入る組み合わせにしてある。
+// 疾患名は人によって違い推測してはいけないので自動では選ばず、画面の注意書きで選択を促す。
+const PRESET_REASON_TAGS = {
+  bath_tub:  { body:['下肢筋力低下','膝の関節可動域制限'], act:['浴槽への出入り','浴槽内での立ち座り'], env:['洗い場と浴槽の高低差が大きい'], effect:['転倒の危険を防ぐ','安全に入浴できる'] },
+  bath_other:{ body:['下肢筋力低下','立位保持の不安定'], act:['洗い場での立ち座り','洗身動作'], effect:['転倒の危険を防ぐ','入浴動作の自立を維持する'] },
+  toilet_pt: { body:['下肢筋力低下','立位保持の不安定'], act:['夜間のトイレへの移動','屋内の移動'], env:['トイレまでの距離が長い'], effect:['転倒の危険を防ぐ','安全に排泄できる'] },
+  toilet_other:{ body:['下肢筋力低下','膝の関節可動域制限'], act:['便座からの立ち上がり'], effect:['膝・腰への負担を軽減する','排泄の自立を維持する'] },
+  cane:      { body:['下肢筋力低下','体幹バランス低下'], act:['屋内の移動','屋外の移動'], effect:['歩行の安定を図る','転倒の危険を防ぐ'] },
+  slope:     { body:['下肢筋力低下'], act:['段差の昇降','屋外の移動'], env:['玄関に段差がある'], effect:['移動の安全性を確保する','介護者の負担を軽減する'] }
+};
+
 function updateReasonSuggestion(n, key, item) {
-  // カテゴリ（および商品名）に応じて関連度の高いタグを自動選択
+  // カテゴリ（および商品名）に応じて関連度の高いタグを自動選択する。
+  // ※あくまで下書きなので、実際のご本人の状態に合わせて必ず確認・修正して使う
   const st = itemState[n-1];
   st.selectedTags.clear();
   const name = item ? item.name : '';
+  let preset = null;
   if (key === 'bath') {
-    if (name.includes('浴槽台') || name.includes('浴槽手すり')) {
-      st.selectedTags.add('浴槽内での立ち座り困難');
-      st.selectedTags.add('浴槽への移乗困難');
-      st.selectedTags.add('安全な入浴を可能にする');
-    } else {
-      st.selectedTags.add('入浴動作困難');
-      st.selectedTags.add('洗身困難');
-      st.selectedTags.add('安全な入浴を可能にする');
-    }
+    preset = (name.includes('浴槽台') || name.includes('浴槽手すり')) ? PRESET_REASON_TAGS.bath_tub : PRESET_REASON_TAGS.bath_other;
   } else if (key === 'toilet') {
-    if (name.includes('ポータブルトイレ')) {
-      st.selectedTags.add('屋内移動困難');
-      st.selectedTags.add('トイレ動作困難');
-      st.selectedTags.add('安全なトイレ動作を可能にする');
-    } else {
-      st.selectedTags.add('便座からの立ち座り困難');
-      st.selectedTags.add('起立困難');
-      st.selectedTags.add('安全なトイレ動作を可能にする');
-    }
+    preset = name.includes('ポータブルトイレ') ? PRESET_REASON_TAGS.toilet_pt : PRESET_REASON_TAGS.toilet_other;
   } else if (key === 'cane') {
-    st.selectedTags.add('歩行困難');
-    st.selectedTags.add('立位不安定');
-    st.selectedTags.add('歩行の安定を図る');
+    preset = PRESET_REASON_TAGS.cane;
   } else if (key === 'slope') {
-    st.selectedTags.add('屋外移動困難');
-    st.selectedTags.add('安全な移動を可能にする');
+    preset = PRESET_REASON_TAGS.slope;
+  }
+  if (preset){
+    ['body','act','env','effect'].forEach(k => (preset[k]||[]).forEach(t => st.selectedTags.add(t)));
   }
   renderTags(n);
   updatePreview(n);
@@ -2068,37 +2096,76 @@ function removeCustomTag(n, text, tagEl) {
   updatePreview(n);
 }
 
+// 選択されたタグを分類ごとに取り出す（カスタムキーワードは身体状況の側に寄せる）
+function classifySelectedTags_(n){
+  const st = itemState[n-1];
+  const pick = kind => tagsOfKind_(kind).filter(t => st.selectedTags.has(t));
+  const known = new Set();
+  TAG_GROUPS.forEach(g => g.tags.forEach(t => known.add(t)));
+  const custom = st.customPhrases.filter(t => st.selectedTags.has(t));
+  // 旧バージョンのタグ名で保存された案件を読み込んだ場合も理由文から消えないよう、
+  // どのグループにも属さない選択済みタグは身体状況側の記述として扱う
+  const legacy = Array.from(st.selectedTags).filter(t => !known.has(t) && !custom.includes(t));
+  return {
+    disease: pick('disease'),
+    body:    pick('body'),
+    act:     pick('act'),
+    env:     pick('env'),
+    effect:  pick('effect'),
+    custom:  [...custom, ...legacy]
+  };
+}
+
+// 身体状況（疾患・身体機能・書類から取り込んだキーワード）が1つも入っていないかを判定する。
+// 保険者は「その人の心身の状況に適合しているか」を理由欄で見るため、これが無い理由文は不可
+function lacksBodyCondition_(n){
+  const c = classifySelectedTags_(n);
+  return c.disease.length === 0 && c.body.length === 0 && c.custom.length === 0;
+}
+
 function buildReason(n) {
   const st = itemState[n-1];
   if (st.selectedTags.size === 0 && st.customPhrases.length === 0) return '';
 
   const itemName = document.getElementById(`i${n}n`).value.trim() || '当該福祉用具';
+  const c = classifySelectedTags_(n);
 
-  // Group selected tags
-  const bodyTags = TAG_GROUPS[0].tags.filter(t => st.selectedTags.has(t));
-  const actTags  = TAG_GROUPS[1].tags.filter(t => st.selectedTags.has(t));
-  const effTags  = TAG_GROUPS[2].tags.filter(t => st.selectedTags.has(t));
-  const custom   = st.customPhrases.filter(t => st.selectedTags.has(t));
+  // 【原因】疾患・既往 ＋ 身体機能の状況（書類から取り込んだキーワードもここに含める）
+  const causeBody = [...c.body, ...c.custom];
+  let cause = '';
+  if (c.disease.length && causeBody.length){
+    cause = `${c.disease.join('・')}により${causeBody.join('・')}がみられ、`;
+  } else if (c.disease.length){
+    cause = `${c.disease.join('・')}があり、`;
+  } else if (causeBody.length){
+    cause = `${causeBody.join('・')}がみられ、`;
+  }
 
-  let parts = [];
-  if (bodyTags.length || custom.length) {
-    const all = [...bodyTags, ...custom];
-    parts.push(all.join('・') + 'のため、');
+  // 【現状】どの動作がどう困難か
+  let difficulty = '';
+  if (c.act.length){
+    difficulty = `${c.act.join('・')}が困難となっている。`;
+  } else if (cause){
+    difficulty = '日常生活動作に支障が生じている。';
   }
-  if (actTags.length) {
-    parts.push(actTags.join('・') + 'な状態である。');
-  }
-  if (effTags.length) {
-    parts.push(`${itemName}を使用することで、${effTags.join('・')}ために必要である。`);
-  } else if (parts.length > 0) {
-    parts.push(`${itemName}の使用が必要である。`);
-  }
-  return parts.join('');
+
+  // 【環境】住環境の要因（あれば1文として補う）
+  const env = c.env.length ? `また、${c.env.join('・')}ため、動作時に転倒の危険がある。` : '';
+
+  // 【効果】用具を使うことで何が変わるか
+  // 効果タグは終止形の動詞（例「転倒の危険を防ぐ」「安全に入浴できる」）で揃えてあるため、
+  // そのまま「〜ため、」に続けられる
+  const effect = c.effect.length
+    ? `${itemName}を使用することで、${c.effect.join('・')}ため、購入が必要である。`
+    : `${itemName}の使用により、上記の動作を安全に行えるようにする必要がある。`;
+
+  return `${cause}${difficulty}${env}${effect}`;
 }
 
 function updatePreview(n) {
   const st = itemState[n-1];
-  if (st.manualEdit) return;
+  const warn = document.getElementById(`reasonWarn${n}`);
+  if (st.manualEdit) { if (warn) warn.style.display = 'none'; return; }
   const reason = buildReason(n);
   const preview = document.getElementById(`preview${n}`);
   if (reason) {
@@ -2108,6 +2175,9 @@ function updatePreview(n) {
     preview.textContent = 'タグを選択すると理由文が自動生成されます';
     preview.classList.add('empty');
   }
+  // 身体状況（疾患・身体機能・書類から取り込んだキーワード）が無い理由文は
+  // 保険者が心身状況との適合を確認できないため、その場で気づけるよう警告する
+  if (warn) warn.style.display = (reason && lacksBodyCondition_(n)) ? 'block' : 'none';
 }
 
 function toggleEdit(n) {
@@ -2458,6 +2528,67 @@ async function centerCellsInSheet_(zip, xml, refs, baseRef){
       cache[baseId] = r.index;
     }
     xml = setCellStyleInXml_(xml, ref, cache[baseId]);
+  }
+  zip.file('xl/styles.xml', stylesXml);
+  return xml;
+}
+
+// baseXfIndexのセル書式から、指定した辺の罫線だけを消した新しいborder＋xfを追加し、そのxf番号を返す
+function addXfWithoutBorderSide_(stylesXml, baseXfIndex, side){
+  const xfM = stylesXml.match(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/);
+  const bdM = stylesXml.match(/<borders count="(\d+)">([\s\S]*?)<\/borders>/);
+  if (!xfM || !bdM) return null;
+  const xfs = xfM[2].match(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g) || [];
+  const borders = bdM[2].match(/<border\b[^>]*?(?:\/>|>[\s\S]*?<\/border>)/g) || [];
+  const baseXf = xfs[baseXfIndex];
+  if (!baseXf) return null;
+  const bidM = baseXf.match(/borderId="(\d+)"/);
+  const baseBorder = borders[bidM ? parseInt(bidM[1],10) : 0];
+  if (!baseBorder) return null;
+  const sideRe = new RegExp('<' + side + '\\b[^>]*?(?:/>|>[\\s\\S]*?</' + side + '>)');
+  const newBorder = sideRe.test(baseBorder) ? baseBorder.replace(sideRe, '<' + side + '/>') : baseBorder;
+  const newBorderId = borders.length;
+  stylesXml = stylesXml.replace(bdM[0], `<borders count="${newBorderId+1}">${bdM[2]}${newBorder}</borders>`);
+  let newXf = /borderId="\d+"/.test(baseXf)
+    ? baseXf.replace(/borderId="\d+"/, `borderId="${newBorderId}"`)
+    : baseXf.replace(/^<xf\b/, `<xf borderId="${newBorderId}"`);
+  if (!/applyBorder="1"/.test(newXf)) newXf = newXf.replace(/^<xf\b/, '<xf applyBorder="1"');
+  const xfM2 = stylesXml.match(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/);
+  const newIndex = xfs.length;
+  stylesXml = stylesXml.replace(xfM2[0], `<cellXfs count="${newIndex+1}">${xfM2[2]}${newXf}</cellXfs>`);
+  return { xml: stylesXml, index: newIndex };
+}
+
+// 明細の「内訳」列（D〜K）だけは品名行とメーカー名行が別セルのため、行の途中に点線が1本出る。
+// 他の列（B・C・L・M・N〜S・T〜Y・Z〜AE）は2行分が縦に結合されていて内部に線が出ないので、
+// 内訳列だけ細い線が入って見え「商品欄のセルだけ細い線になっている」状態になっていた。
+// その内部の区切り線（品名行の下＝メーカー名行の上）を消し、他の列と同じ1マスの見た目に揃える。
+async function removeDetailInnerRule_(zip, xml){
+  const stylesFile = zip.file('xl/styles.xml');
+  if (!stylesFile) return xml;
+  let stylesXml = await stylesFile.async('string');
+  const cols = ['D','E','F','G','H','I','J','K'];
+  const plan = [
+    { rows: [12,14,16,18,20], side: 'bottom' }, // 品名行の下側
+    { rows: [13,15,17,19,21], side: 'top' }     // メーカー名行の上側
+  ];
+  const cache = {};
+  for (const pl of plan){
+    for (const r of pl.rows){
+      for (const col of cols){
+        const ref = col + r;
+        const baseId = getCellStyleId_(xml, ref);
+        if (baseId === null) continue;
+        const key = baseId + ':' + pl.side;
+        if (cache[key] === undefined){
+          const res = addXfWithoutBorderSide_(stylesXml, baseId, pl.side);
+          if (!res) continue;
+          stylesXml = res.xml;
+          cache[key] = res.index;
+        }
+        xml = setCellStyleInXml_(xml, ref, cache[key]);
+      }
+    }
   }
   zip.file('xl/styles.xml', stylesXml);
   return xml;
@@ -3485,6 +3616,8 @@ async function generateInvoice(){
 
     // 明細テーブルの罫線の不揃い（二重線で太く見える／横線が欠ける）を整える
     xml = normalizeInvoiceTableBorders_(xml);
+    // 内訳（商品）列だけに入る点線の区切り線を消し、他の列と同じ見た目に揃える
+    xml = await removeDetailInnerRule_(zip, xml);
 
     zip.file(sheetPath, xml);
     const blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
