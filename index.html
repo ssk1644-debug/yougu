@@ -146,6 +146,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
     <div>
       <h1>介護保険 福祉用具購入費支給申請書</h1>
       <p>受領委任払い用 ／ 自動入力フォーム（福山市）</p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-09-25　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -182,6 +183,13 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
       <button class="btn bg" style="border:1px solid var(--border);margin-top:8px;" onclick="saveGasUrl()">保存</button>
       <button class="btn bg" style="border:1px solid var(--border);margin-top:8px;" onclick="testGasConnection()">🔌 接続テスト</button>
       <div id="gasUrlStatus" class="note" style="margin-top:8px;"></div>
+      <hr style="margin:16px 0;border:none;border-top:1px solid var(--border);">
+      <div class="grid">
+        <div class="f s2"><label>この端末のラベル（不具合報告時の特定用。例：受付PC／田中タブレット）</label><input type="text" id="deviceLabelInput" placeholder="端末-XXXX"></div>
+      </div>
+      <button class="btn bg" style="border:1px solid var(--border);margin-top:8px;" onclick="saveDeviceLabelUI()">保存</button>
+      <div id="deviceLabelStatus" class="note" style="margin-top:8px;"></div>
+      <p class="note" style="margin-top:8px;">案件を保存した際、この端末ラベルとアプリのバージョン（画面右上「ver」表記と同じもの）が一緒に記録されます。「動きがおかしい」場合、その案件を最後に保存した端末が古いバージョンを使っていないかの確認に使えます。</p>
       <p class="note" style="margin-top:8px;">案件一覧・保存機能を使うには、Google Apps Scriptで発行したウェブアプリのURLをここに登録してください。URLもこの端末のブラウザ内にのみ保存されます。</p>
     </div>
   </div>
@@ -846,6 +854,35 @@ function getApiKey(){ return localStorage.getItem(API_KEY_STORAGE) || ""; }
 function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claude-sonnet-5"; }
 
 // ============================================================
+// アプリバージョン／端末ラベル（不具合報告時に「どの端末・どの版で保存/操作したか」を
+// 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
+// serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
+// ============================================================
+const APP_VERSION = "2026-09-25";
+const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
+function getDeviceLabel(){
+  let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
+  if (!label){
+    // 未設定の場合は端末を区別できる程度のランダムな仮ラベルを自動生成しておく
+    // （⚙設定パネルから「受付PC」等、分かりやすい名前に変更できる）
+    label = "端末-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+    localStorage.setItem(DEVICE_LABEL_STORAGE, label);
+  }
+  return label;
+}
+function saveDeviceLabelUI(){
+  const el = document.getElementById("deviceLabelInput");
+  const label = (el && el.value.trim()) || "";
+  if (label) localStorage.setItem(DEVICE_LABEL_STORAGE, label);
+  const s = document.getElementById("deviceLabelStatus");
+  if (s){ s.textContent = "保存しました。"; s.style.color = "var(--success)"; }
+}
+function loadDeviceLabelUI(){
+  const el = document.getElementById("deviceLabelInput");
+  if (el) el.value = getDeviceLabel();
+}
+
+// ============================================================
 // 案件管理システム（Google Apps Script連携）
 // ============================================================
 const GAS_URL_STORAGE = "asport_shinsei_gas_url";
@@ -1153,7 +1190,7 @@ async function loadCaseById(caseId){
 function serializeFormState(){
   const values = {};
   document.querySelectorAll("input[id], select[id], textarea[id]").forEach(el => {
-    if (["apiKeyInput","apiModelInput","gasUrlInput","caseListSearch"].includes(el.id)) return;
+    if (["apiKeyInput","apiModelInput","gasUrlInput","caseListSearch","deviceLabelInput"].includes(el.id)) return;
     if (el.type === "file" || el.type === "checkbox") return;
     values[el.id] = el.value;
   });
@@ -1169,7 +1206,20 @@ function serializeFormState(){
     change: document.getElementById('tdChange').checked
   };
   const signatureDataUrl = getSignatureDataUrl();
-  return { values, visibleItemCount, itemReasonState, tenDayStatus, signatureDataUrl };
+  // パンフレット出力用に保持しているselectedItemData（写真・カタログ切り抜き情報）も
+  // 案件データに含めて保存する。catalogPages（カタログページ画像の配列）はサイズが大きく
+  // 保存先（案件管理システムのシート）を圧迫するため保存対象から除外し、代わりに
+  // catalogSource（どのカタログ由来か）だけを保持して、読み込み時にCATALOG_PAGESから
+  // 引き直す（loadCaseIntoForm参照）。これにより保存前後で写真・切り抜き情報が
+  // 同一に復元される
+  const selectedItemDataSaved = {};
+  [1,2,3].forEach(n => {
+    const d = selectedItemData[n];
+    if (!d) return;
+    const { catalogPages, ...rest } = d;
+    selectedItemDataSaved[n] = rest;
+  });
+  return { values, visibleItemCount, itemReasonState, tenDayStatus, signatureDataUrl, selectedItemData: selectedItemDataSaved, savedByDevice: getDeviceLabel(), savedAppVersion: APP_VERSION, savedAt: new Date().toISOString() };
 }
 
 // 品目nの「必要な理由」タグ選択・カスタムキーワード・手動編集状態を復元する
@@ -1206,6 +1256,9 @@ function loadCaseIntoForm(rec){
   const data = rec && rec.formData;
   if (!data){ toast("❌ この案件のフォームデータが見つかりません", false); return; }
   const wantCount = data.visibleItemCount || 1;
+  // 読み込み前に画面上で品目ブロックを追加操作していた場合、読み込む案件の品目数より
+  // 多く表示されたままにならないよう、余分なブロックは削除ボタン相当の処理で畳んでおく
+  while (visibleItemCount > wantCount) removeItemBlock(visibleItemCount);
   while (visibleItemCount < wantCount) addNextItemBlock();
   Object.entries(data.values || {}).forEach(([id, val]) => {
     const el = document.getElementById(id);
@@ -1214,6 +1267,27 @@ function loadCaseIntoForm(rec){
   for (let n = 1; n <= 3; n++){
     restoreItemReasonState(n, (data.itemReasonState || [])[n-1]);
   }
+  // パンフレット出力用のselectedItemData（写真・カタログ切り抜き情報）を復元する。
+  // 復元前に必ず全品目分をクリアしないと、読み込み前に画面に残っていた
+  // （前の案件・前の選択操作による）写真データがそのまま居座ってしまい、
+  // 「商品写真が違う」「選択していない商品の写真も出る」といった不具合の原因になる
+  selectedItemData = {};
+  for (let n = 1; n <= 3; n++){
+    document.querySelectorAll(`#pcards${n} .pcard`).forEach(c => c.classList.remove('selected'));
+    const preview = document.getElementById(`presetPreview${n}`);
+    if (preview){ preview.classList.remove('show'); preview.innerHTML = ''; }
+  }
+  const savedSelectedItemData = data.selectedItemData || {};
+  Object.entries(savedSelectedItemData).forEach(([nStr, item]) => {
+    const n = parseInt(nStr, 10);
+    if (!item || !n) return;
+    // catalogPages（カタログページ画像）は保存時に容量削減のため除外しているので、
+    // catalogSourceを手がかりに、現在のCATALOG_PAGESから同じページ画像群を引き直す
+    const restored = { ...item };
+    if (restored.catalogSource) restored.catalogPages = CATALOG_PAGES[restored.catalogSource] || [];
+    selectedItemData[n] = restored;
+    showPresetPreview(n, restored);
+  });
   const td = data.tenDayStatus || {};
   document.getElementById('tdOk').checked = !!td.ok;
   document.getElementById('tdReExplain').checked = !!td.reExplain;
@@ -1227,7 +1301,13 @@ function loadCaseIntoForm(rec){
   toggleSeihoFields();
   currentCaseId = rec.caseId || "";
   currentCaseStatus = rec.status || "入力中";
-  toast("✅ 案件を読み込みました：" + (rec.customerName || ""));
+  const savedInfo = (data.savedByDevice || data.savedAppVersion)
+    ? `（前回保存：${data.savedByDevice || '端末不明'} / ver ${data.savedAppVersion || '不明'}）`
+    : '';
+  toast("✅ 案件を読み込みました：" + (rec.customerName || "") + savedInfo);
+  if (data.savedAppVersion && data.savedAppVersion !== APP_VERSION){
+    console.warn(`この案件は異なるバージョン（保存時 ver ${data.savedAppVersion} → 現在 ver ${APP_VERSION}）で保存されています。表示内容がおかしい場合は保存端末側のキャッシュ更新もご確認ください。`);
+  }
 }
 
 // 現在の入力内容を案件として新規保存／既存案件の更新を行う
@@ -2326,7 +2406,7 @@ function toast(msg, ok=true){
 function clearForm(){
   if (!confirm('入力内容をすべてクリアしますか？')) return;
   document.querySelectorAll('input,textarea').forEach(el => {
-    if (el.id === 'apiKeyInput' || el.id === 'apiModelInput' || el.id === 'gasUrlInput') return; // APIキー・案件管理システムURLの設定は保持
+    if (el.id === 'apiKeyInput' || el.id === 'apiModelInput' || el.id === 'gasUrlInput' || el.id === 'deviceLabelInput') return; // APIキー・案件管理システムURL・端末ラベルの設定は保持
     el.value='';
   });
   currentCaseId = '';
@@ -4234,9 +4314,10 @@ function generateReceipt(){
     return `<div class="abox${blank ? ' blank' : ''}"><div class="adig">${d}</div><div class="albl">${lbl}</div></div>`;
   }).join('');
 
+  // 5万円未満の場合の「収入印紙不要」の注記は、周知の事実であるため表示しない（2026-09-25）
   const stampNote = payAmount >= 50000
     ? '※本領収証の金額は5万円以上のため、本来収入印紙の貼付が必要です（発行時にご確認ください）。'
-    : '※本領収証の金額は5万円未満のため、収入印紙の貼付は法令上不要です。';
+    : '';
 
   const descNote = overAmount > 0
     ? `但し　<b>${desc}</b>　代金として（保険給付対象費用の${ratio}割負担分＋支給限度額超過分）上記正に領収いたしました。`
@@ -4269,7 +4350,7 @@ function generateReceipt(){
         <tr class="bdsum"><td colspan="2">合計領収額（B+C）</td><td class="bdval">￥${fmtN(payAmount)}</td></tr>
         <tr class="bdtaxrow"><td colspan="2">（内消費税等）</td><td class="bdval">（￥${fmtN(receiptTax)}）</td></tr>
       </table>
-      <div class="stampnote">${stampNote}</div>
+      ${stampNote ? `<div class="stampnote">${stampNote}</div>` : ''}
       <div class="foot">
         <div class="stamparea">収入印紙</div>
         <div class="comp" style="flex:1;">
@@ -4803,6 +4884,7 @@ buildItems();
 [1,2,3].forEach(setTodayOnItemDate);
 loadApiKeyUI();
 loadGasUrlUI();
+loadDeviceLabelUI();
 ensureCatalogFixesLoaded_(); // 案件管理システムURLが設定済みなら、カタログ補正の共有データを先読みしておく
 attachAllDateSpinners();
 updateReviewSignatureStatusUI();
