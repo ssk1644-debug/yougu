@@ -1207,15 +1207,23 @@ function serializeFormState(){
   };
   const signatureDataUrl = getSignatureDataUrl();
   // パンフレット出力用に保持しているselectedItemData（写真・カタログ切り抜き情報）も
-  // 案件データに含めて保存する。catalogPages（カタログページ画像の配列）はサイズが大きく
-  // 保存先（案件管理システムのシート）を圧迫するため保存対象から除外し、代わりに
-  // catalogSource（どのカタログ由来か）だけを保持して、読み込み時にCATALOG_PAGESから
-  // 引き直す（loadCaseIntoForm参照）。これにより保存前後で写真・切り抜き情報が
-  // 同一に復元される
+  // 案件データに含めて保存する。ただし画像本体（プリセット品目のimageUrl、カタログの
+  // catalogPages）をそのまま含めると1品目だけで数万文字（実測13,000〜73,580文字）に
+  // なり、案件管理システム側の保存先（スプレッドシート1セル＝上限5万文字）を簡単に
+  // 超えてしまい保存自体が失敗する（2026-09-25、写真データを保存に含めた直後に発生・原因特定）。
+  // そのため画像本体は保存せず、読み込み時に実体を引き直すための軽量な識別情報だけを保存する：
+  // ・プリセット選択品目（presetGroupKeyあり）→ presetGroupKey/presetItemNameのみ保存し、
+  //   読込時にPRESETSから同じ品目を検索して復元（loadCaseIntoForm参照）
+  // ・カタログ検索選択品目（catalogSourceあり）→ catalogPagesだけ除外し、読込時に
+  //   CATALOG_PAGESから引き直す（画像本体を含まないadapted構造のためこちらは従来通り軽量）
   const selectedItemDataSaved = {};
   [1,2,3].forEach(n => {
     const d = selectedItemData[n];
     if (!d) return;
+    if (d.presetGroupKey){
+      selectedItemDataSaved[n] = { presetGroupKey: d.presetGroupKey, presetItemName: d.presetItemName };
+      return;
+    }
     const { catalogPages, ...rest } = d;
     selectedItemDataSaved[n] = rest;
   });
@@ -1281,10 +1289,21 @@ function loadCaseIntoForm(rec){
   Object.entries(savedSelectedItemData).forEach(([nStr, item]) => {
     const n = parseInt(nStr, 10);
     if (!item || !n) return;
-    // catalogPages（カタログページ画像）は保存時に容量削減のため除外しているので、
-    // catalogSourceを手がかりに、現在のCATALOG_PAGESから同じページ画像群を引き直す
-    const restored = { ...item };
-    if (restored.catalogSource) restored.catalogPages = CATALOG_PAGES[restored.catalogSource] || [];
+    let restored;
+    if (item.presetGroupKey){
+      // プリセット選択品目は画像本体を保存していないので、PRESETSから同じ品目を
+      // 名前で検索し実体（写真・価格・商品ページURL等）を引き直す。プリセットの内容が
+      // 変更・削除されていた場合はnullのまま（写真未登録として表示される）
+      const group = PRESETS[item.presetGroupKey];
+      const found = group && group.items.find(it => it.name === item.presetItemName);
+      if (!found) return;
+      restored = Object.assign({}, found, { presetGroupKey: item.presetGroupKey, presetItemName: item.presetItemName });
+    } else {
+      // カタログ検索選択品目：catalogPages（カタログページ画像）は保存時に容量削減のため
+      // 除外しているので、catalogSourceを手がかりに、現在のCATALOG_PAGESから同じページ画像群を引き直す
+      restored = { ...item };
+      if (restored.catalogSource) restored.catalogPages = CATALOG_PAGES[restored.catalogSource] || [];
+    }
     selectedItemData[n] = restored;
     showPresetPreview(n, restored);
   });
@@ -1793,8 +1812,14 @@ function selectPreset(n, key, item, card) {
   document.getElementById(`i${n}n`).value = item.name;
   document.getElementById(`i${n}p`).value = item.price != null ? item.price : '';
   if (item.maker) document.getElementById(`i${n}mk`).value = item.maker;
-  // パンフレット資料出力用に写真URL・商品ページURLなどを保持
-  selectedItemData[n] = item;
+  // パンフレット資料出力用に写真URL・商品ページURLなどを保持。
+  // PRESETS内のオブジェクトそのものを参照すると、後続のカタログ枠補正処理（markCropForRetry等）が
+  // 元のPRESETSデータを直接書き換えてしまう（同じ商品を次回以降選んだ時に影響が残る）ため、
+  // 必ずコピーしてから保持する。あわせて、どのプリセットを選んだかを示す軽量な識別情報
+  // （presetGroupKey/presetItemName）も付与し、案件保存時はこの識別情報だけを保存して
+  // 画像本体（imageUrl、数万文字規模になりうる）は保存しないようにする（serializeFormState/
+  // loadCaseIntoForm側で、保存時はこの識別情報のみ・読込時はPRESETSから実体を引き直す）
+  selectedItemData[n] = Object.assign({}, item, { presetGroupKey: key, presetItemName: item.name });
   // 写真・商品ページを自動表示
   showPresetPreview(n, item);
   // Update reason suggestion based on category
@@ -4314,10 +4339,8 @@ function generateReceipt(){
     return `<div class="abox${blank ? ' blank' : ''}"><div class="adig">${d}</div><div class="albl">${lbl}</div></div>`;
   }).join('');
 
-  // 5万円未満の場合の「収入印紙不要」の注記は、周知の事実であるため表示しない（2026-09-25）
-  const stampNote = payAmount >= 50000
-    ? '※本領収証の金額は5万円以上のため、本来収入印紙の貼付が必要です（発行時にご確認ください）。'
-    : '';
+  // 収入印紙に関する注記文言は金額を問わず不要（2026-09-25、5万円未満分の削除に続き5万円以上分も削除）
+  const stampNote = '';
 
   const descNote = overAmount > 0
     ? `但し　<b>${desc}</b>　代金として（保険給付対象費用の${ratio}割負担分＋支給限度額超過分）上記正に領収いたしました。`
