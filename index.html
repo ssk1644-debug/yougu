@@ -4351,7 +4351,11 @@ function generateReceipt(){
   .comp .cn{font-size:18px;font-weight:500;letter-spacing:0.02em;color:#1f2328;margin-bottom:3px;}
   .compgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;}
   .stampguide{width:26mm;height:26mm;flex-shrink:0;margin-left:8px;display:flex;align-items:center;justify-content:center;border:1.6px dashed #888;border-radius:50%;font-size:9.5px;color:#999;letter-spacing:2px;}
-  .cutline{display:flex;align-items:center;gap:10px;margin:2.5mm 0;color:#888;font-size:11px;user-select:none;}
+  /* 2026-09-25：実機プリンタでの印刷結果、印刷した目安線と実際に切った位置が数mmズレる
+     との報告があった（プリンタ・用紙側の要因で完全な一致はソフト側だけでは追い切れないため、
+     線ジャストではなく前後に余裕を持たせる方針に変更）。余白を2.5mm→7mmに広げ、
+     数mm程度のズレなら書類本体（枠線の外の余白部分）に収まるようにした */
+  .cutline{display:flex;align-items:center;gap:10px;margin:7mm 0;color:#888;font-size:11px;user-select:none;}
   .cutline::before,.cutline::after{content:'';flex:1;border-top:1px dashed #999;}
   @media print {
     @page { size: A4; margin: 8mm; }
