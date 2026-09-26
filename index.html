@@ -22,6 +22,14 @@ header h1{font-family:'Noto Serif JP',serif;font-size:16px;font-weight:700;lette
 header p{font-size:11px;opacity:.72;margin-top:3px;}
 .hb{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);border-radius:6px;padding:7px 16px;font-size:12px;white-space:nowrap;}
 .container{max-width:920px;margin:0 auto;padding:24px 20px 100px;}
+/* 案件読み込み完了を分かりやすくする視覚フィードバック（2026-09-26追加）。
+   トースト通知だけでは気づきにくいとの指摘を受け、画面全体の枠を一時的に
+   緑色でハイライトしフェードアウトさせる */
+@keyframes caseLoadedFlash{
+  0%{ box-shadow:0 0 0 4px rgba(46,160,67,0.55), inset 0 0 0 2000px rgba(46,160,67,0.06); }
+  100%{ box-shadow:0 0 0 4px rgba(46,160,67,0), inset 0 0 0 2000px rgba(46,160,67,0); }
+}
+.container.case-loaded-flash{ animation:caseLoadedFlash 2.2s ease-out; border-radius:8px; }
 .sec{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:18px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);}
 .sh{background:var(--sec-bg);border-bottom:1px solid var(--border);padding:13px 20px;display:flex;align-items:center;gap:10px;}
 .si{width:30px;height:30px;background:var(--accent);color:#fff;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
@@ -146,7 +154,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
     <div>
       <h1>介護保険 福祉用具購入費支給申請書</h1>
       <p>受領委任払い用 ／ 自動入力フォーム（福山市）</p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-09-25　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-09-26　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -206,7 +214,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
       <div style="overflow-x:auto;margin-top:10px;">
         <table class="htbl" style="min-width:860px;">
           <thead><tr>
-            <th>お客様名</th><th>購入日</th><th>品目概要</th><th style="text-align:right;">購入金額</th><th>年度限度額</th><th>進捗状況</th><th>適合確認PDF</th><th></th>
+            <th>お客様名</th><th>購入日</th><th>品目概要</th><th style="text-align:right;">購入金額</th><th>年度限度額</th><th>進捗状況</th><th>適合確認PDF</th><th></th><th></th>
           </tr></thead>
           <tbody id="caseListBody"></tbody>
         </table>
@@ -858,7 +866,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-09-25";
+const APP_VERSION = "2026-09-26";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -1123,7 +1131,7 @@ function renderCaseList(){
     .filter(c => !q || (c.customerName||"").includes(q))
     .sort((a,b) => (b.updatedAt||"").localeCompare(a.updatedAt||""));
   if (!rows.length){
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#888;">該当する案件がありません</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#888;">該当する案件がありません</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(c => {
@@ -1154,6 +1162,7 @@ function renderCaseList(){
       <td>${statusBadgeHtml(c.status)}${doneNote}<div class="status-btns">${btns}</div></td>
       <td style="text-align:center;">${pdfCell}</td>
       <td><button class="btn bg" style="padding:5px 10px;min-width:auto;font-size:12px;" onclick="loadCaseById('${c.caseId}')">📂 読み込む</button></td>
+      <td><button type="button" class="btn bg" style="padding:5px 10px;min-width:auto;font-size:12px;color:var(--danger, #c0392b);" onclick="deleteCaseById('${c.caseId}','${xmlEscape(c.customerName||'').replace(/'/g,"\\'")}')">🗑 削除</button></td>
     </tr>`;
   }).join("");
 }
@@ -1174,7 +1183,26 @@ async function updateCaseStatus(caseId, newStatus){
   }
 }
 
+// 案件一覧から案件を削除する。誤操作防止のため、必ず確認ダイアログを経てから
+// 実際の削除（GAS側の"delete"アクション）を呼び出す。取り消しはできない旨も明記する
+async function deleteCaseById(caseId, customerName){
+  const label = customerName ? `「${customerName}」` : 'この案件';
+  if (!confirm(`${label}を削除します。この操作は取り消せません。本当に削除しますか？`)) return;
+  try{
+    await gasPost("delete", { caseId });
+    caseListCache = caseListCache.filter(c => c.caseId !== caseId);
+    if (caseId === currentCaseId) currentCaseId = ""; // 今読み込んでいた案件が削除された場合、画面上の入力内容自体は残す（誤って内容まで消えないように）
+    renderCaseList();
+    toast(`✅ ${label}を削除しました`);
+  } catch(err){
+    toast("❌ 削除に失敗しました：" + err.message, false);
+  }
+}
+
 async function loadCaseById(caseId){
+  // 未保存の編集内容がある状態で別案件を読み込むと、確認なしにその内容が失われてしまうため、
+  // 編集済み（isFormDirty）の場合のみ確認する（まっさらな新規画面からの読込では確認しない）
+  if (isFormDirty() && !confirm('保存されていない変更があります。破棄してこの案件を読み込みますか？')) return;
   try{
     const data = await gasFetch("get", { id: caseId });
     loadCaseIntoForm(data.case);
@@ -1182,6 +1210,36 @@ async function loadCaseById(caseId){
     toast("❌ 読み込みに失敗しました：" + err.message, false);
   }
 }
+
+// ============================================================
+// 未保存の編集内容の検知（ページ離脱時・別案件読込前の確認用、2026-09-26追加）
+// ============================================================
+// 直近に「同期済み」とみなした状態のスナップショット（ページ初期表示時／案件読込直後／
+// 保存成功直後／フォームクリア直後に更新する）。これと現在の状態を比較し、差があれば
+// 「未保存の編集がある」と判定する
+let lastSyncedFormSnapshot = null;
+// serializeFormState()の結果から、内容の比較に使わない揮発性フィールド
+// （savedAt等、呼ぶたびに値が変わるもの）を除いたJSON文字列を作る
+function snapshotForDirtyCheck(){
+  const fd = serializeFormState();
+  const { savedByDevice, savedAppVersion, savedAt, ...rest } = fd;
+  return JSON.stringify(rest);
+}
+// 現在の同期済みスナップショットを「今の状態」で更新する（＝以後は今の状態を基準に比較する）
+function markFormSynced(){
+  lastSyncedFormSnapshot = snapshotForDirtyCheck();
+}
+// 直近の同期済み状態から何か変更されているか（＝未保存の編集があるか）
+function isFormDirty(){
+  if (lastSyncedFormSnapshot === null) return false; // 初期化前は判定しない
+  return snapshotForDirtyCheck() !== lastSyncedFormSnapshot;
+}
+window.addEventListener('beforeunload', (e) => {
+  if (isFormDirty()){
+    e.preventDefault();
+    e.returnValue = ''; // 実際の確認メッセージはブラウザ標準のものが表示される（カスタムテキストは指定不可）
+  }
+});
 
 // フォーム全体の入力状態をJSONにまとめる（案件保存用）。
 // id付きの全input/select/textareaの値を汎用的に収集し、加えて
@@ -1327,6 +1385,19 @@ function loadCaseIntoForm(rec){
   if (data.savedAppVersion && data.savedAppVersion !== APP_VERSION){
     console.warn(`この案件は異なるバージョン（保存時 ver ${data.savedAppVersion} → 現在 ver ${APP_VERSION}）で保存されています。表示内容がおかしい場合は保存端末側のキャッシュ更新もご確認ください。`);
   }
+  flashCaseLoadedFeedback();
+  markFormSynced(); // 読み込み直後の状態を「同期済み」の基準にする（未保存編集の検知用）
+}
+
+// 案件の読込が完了したことをトースト通知より目立つ形で伝える視覚フィードバック。
+// 画面全体の枠を一瞬ハイライトしてフェードアウトさせる（.case-loaded-flash、CSS側にアニメーション定義）
+function flashCaseLoadedFeedback(){
+  const el = document.querySelector('.container');
+  if (!el) return;
+  el.classList.remove('case-loaded-flash');
+  void el.offsetWidth; // クラスを一度外して再度付け直すことで、連続読込時もアニメーションを最初からやり直す
+  el.classList.add('case-loaded-flash');
+  setTimeout(() => el.classList.remove('case-loaded-flash'), 2300);
 }
 
 // 現在の入力内容を案件として新規保存／既存案件の更新を行う
@@ -1371,6 +1442,7 @@ async function saveCurrentCase(){
     currentCaseStatus = payload.status;
     toast("✅ 案件を保存しました（" + custName + "）");
     refreshCaseList();
+    markFormSynced(); // 保存直後の状態を「同期済み」の基準にする（未保存編集の検知用）
   } catch(err){
     toast("❌ 保存に失敗しました：" + err.message, false);
   } finally {
@@ -2489,6 +2561,7 @@ function clearForm(){
   { const box = document.getElementById('tdCommentSuggestions'); if (box){ box.style.display = 'none'; box.innerHTML = ''; box._candidates = null; } }
   tdDateAutoFilled = false;
   clearSignaturePad();
+  markFormSynced(); // クリア直後の状態を「同期済み」の基準にする（未保存編集の検知用）
 }
 
 function validate(){
@@ -3778,6 +3851,18 @@ async function buildConformityZipBlob(){
     const sheetFile = zip.file(sheetPath);
     if (!sheetFile) throw new Error('適合確認シート様式ファイルの読み込みに失敗しました');
     let xml = await sheetFile.async('string');
+    // 印刷時にA4 1枚に収まるようにする（2026-09-26、「2枚に分かれる」との報告を受けて対応）。
+    // 様式ファイル側は<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>により「1ページに収める」
+    // 設定自体は入っているが、実際の内容の高さ（52行分、実測約310mm）はA4 1枚の印刷可能領域
+    // （約273mm）を超えており、<pageSetup>側にfitToWidth/fitToHeightの明示指定が無いと
+    // （仕様上は両方とも既定値1のはずだが）実際にExcel等で開くと2ページに分かれてしまう事例を確認。
+    // 解釈の余地をなくすため、pageSetupにfitToWidth="1" fitToHeight="1"を明示的に書き込む
+    xml = xml.replace(/<pageSetup([^>]*)\/>/, (m, attrs) => {
+      let a = attrs;
+      if (!/\bfitToWidth=/.test(a)) a += ' fitToWidth="1"';
+      if (!/\bfitToHeight=/.test(a)) a += ' fitToHeight="1"';
+      return `<pageSetup${a}/>`;
+    });
     const set = (ref,val) => { xml = setCellInXml(xml, ref, val); };
     const cb = (ref, checked, label) => { xml = setCellInXml(xml, ref, (checked?'☑':'□') + label); };
     const clr = (ref) => { xml = clearCellInXml(xml, ref); };
@@ -4922,6 +5007,10 @@ updateReviewSignatureStatusUI();
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', () => { tdDateAutoFilled = false; });
 });
+// ページを開いた直後の状態（各種デフォルト値が入った、まだ何も編集していない状態）を
+// 「未保存編集の検知」の基準にする。これにより、何もせず案件一覧から案件を読み込む操作では
+// 確認ダイアログが出ない（「最初の画面からの読込では確認不要」という要望に対応）
+markFormSynced();
 </script>
 </body>
 </html>
