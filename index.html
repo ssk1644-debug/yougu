@@ -130,6 +130,15 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
 .status-btns{display:flex;flex-direction:column;gap:4px;margin-top:6px;}
 .status-btns .btn{padding:5px 8px;min-width:auto;font-size:11px;white-space:nowrap;}
 .status-done-note{font-size:11px;color:#15803d;font-weight:600;margin-top:6px;}
+/* 案件一覧テーブル：お客様名(先頭列)と削除ボタン(末尾列)が画面幅からはみ出して見切れるとの
+   報告（2026-10-01）を受け、この2列だけを左右に固定表示（sticky）し、残りの列は
+   その間を横スクロールする形に変更。常に見えてほしい「誰の案件か」「削除」操作だけは
+   スクロール位置に関わらず見えるようにする狙い */
+.case-tbl th:first-child,.case-tbl td:first-child{position:sticky;left:0;z-index:2;background:var(--surface);box-shadow:2px 0 4px -2px rgba(0,0,0,.18);}
+.case-tbl th:last-child,.case-tbl td:last-child{position:sticky;right:0;z-index:2;background:var(--surface);box-shadow:-2px 0 4px -2px rgba(0,0,0,.18);}
+.case-tbl th:first-child,.case-tbl th:last-child{z-index:3;background:var(--sec-bg);}
+.case-tbl tr:nth-child(even) td:first-child,.case-tbl tr:nth-child(even) td:last-child{background:#fafaf8;}
+
 
 /* Actions */
 .actions{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid var(--border);padding:14px 20px;display:flex;gap:10px;justify-content:center;box-shadow:0 -4px 20px rgba(0,0,0,.1);z-index:50;}
@@ -154,7 +163,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
     <div>
       <h1>介護保険 福祉用具購入費支給申請書</h1>
       <p>受領委任払い用 ／ 自動入力フォーム（福山市）</p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-01　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-01-3　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -211,10 +220,11 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
         <button class="btn bg" style="padding:8px 16px;min-width:auto;" onclick="refreshCaseList()">🔄 更新</button>
         <span id="caseListStatus" class="note"></span>
       </div>
+      <p class="note" style="margin-top:10px;margin-bottom:0;">💡 画面幅に収まらない場合は表の中を左右にスクロールできます（お客様名・削除ボタンは常に表示されたままです）。</p>
       <div style="overflow-x:auto;margin-top:10px;">
-        <table class="htbl" style="min-width:860px;">
+        <table class="htbl case-tbl" style="min-width:960px;">
           <thead><tr>
-            <th>お客様名</th><th>購入日</th><th>品目概要</th><th style="text-align:right;">購入金額</th><th>年度限度額</th><th>進捗状況</th><th>適合確認PDF</th><th></th><th></th>
+            <th>お客様名</th><th>作成者</th><th>購入日</th><th>品目概要</th><th style="text-align:right;">購入金額</th><th>年度限度額</th><th>進捗状況</th><th>適合確認PDF</th><th></th><th></th>
           </tr></thead>
           <tbody id="caseListBody"></tbody>
         </table>
@@ -866,7 +876,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-10-01";
+const APP_VERSION = "2026-10-01-3";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -1131,7 +1141,7 @@ function renderCaseList(){
     .filter(c => !q || (c.customerName||"").includes(q))
     .sort((a,b) => (b.updatedAt||"").localeCompare(a.updatedAt||""));
   if (!rows.length){
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#888;">該当する案件がありません</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:#888;">該当する案件がありません</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(c => {
@@ -1155,6 +1165,7 @@ function renderCaseList(){
       : `<span style="color:#aaa;font-size:12px;">未保存</span>`;
     return `<tr>
       <td>${xmlEscape(c.customerName||"")}</td>
+      <td>${xmlEscape(c.staff||"-")}</td>
       <td>${xmlEscape(c.purchaseDate||"")}</td>
       <td>${xmlEscape(c.itemSummary||"")}</td>
       <td style="text-align:right;">￥${fmtN(c.purchaseAmount||0)}</td>
@@ -2860,6 +2871,31 @@ function setOrCreateCellStyleInXml_(xml, ref, styleIndex){
 // セルが欠けていては直せないため、既に整え終わった1枚目の各セルの書式をそのまま2枚目の
 // 対応セル(+29行)へ複製する方式にした（値は一切触らず書式のみ。セルが無ければ新規作成）。
 // これにより2枚目は常に1枚目と完全に同一の罫線になる。
+// 明細テーブルの結合セル内部(例: T20:Y21の内側U20〜X20)に、元のテンプレートでは
+// セル自体が存在せず書式(罫線)が未定義だった箇所があるため、同じ列位置にある
+// 基準行(品名行=12行目・メーカー名行=13行目)の書式をコピーして補完する。
+// これを行わないと、該当列の罫線が実在のセルを持たず「線が途中で切れる」不具合になる。
+function fillMissingItemRowCells_(xml){
+  const cols = ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA','AB','AC','AD','AE'];
+  const nameRows = [14,16,18,20], makerRows = [15,17,19,21];
+  for (const r of nameRows){
+    for (const col of cols){
+      if (getCellStyleId_(xml, col + r) !== null) continue; // 既存セルはnormalizeInvoiceTableBorders_側に任せる
+      const refStyle = getCellStyleId_(xml, col + '12');
+      if (refStyle === null) continue;
+      xml = setOrCreateCellStyleInXml_(xml, col + r, refStyle);
+    }
+  }
+  for (const r of makerRows){
+    for (const col of cols){
+      if (getCellStyleId_(xml, col + r) !== null) continue;
+      const refStyle = getCellStyleId_(xml, col + '13');
+      if (refStyle === null) continue;
+      xml = setOrCreateCellStyleInXml_(xml, col + r, refStyle);
+    }
+  }
+  return xml;
+}
 function mirrorInvoiceCopy2Borders_(xml){
   const cols = ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA','AB','AC','AD','AE'];
   for (let r1 = 12; r1 <= 21; r1++){
@@ -3853,6 +3889,8 @@ async function generateInvoice(){
     });
 
     // 明細テーブルの罫線の不揃い（二重線で太く見える／横線が欠ける）を整える
+    // 結合セル内部に実体を持たないセルを基準行からコピーして補完(罫線欠落の根本対策)
+    xml = fillMissingItemRowCells_(xml);
     xml = normalizeInvoiceTableBorders_(xml);
     // 内訳（商品）列だけに入る点線の区切り線を消し、他の列と同じ見た目に揃える
     xml = await removeDetailInnerRule_(zip, xml);
