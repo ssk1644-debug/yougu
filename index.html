@@ -163,7 +163,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
     <div>
       <h1>介護保険 福祉用具購入費支給申請書</h1>
       <p>受領委任払い用 ／ 自動入力フォーム（福山市）</p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-01-3　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-02　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -220,11 +220,10 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
         <button class="btn bg" style="padding:8px 16px;min-width:auto;" onclick="refreshCaseList()">🔄 更新</button>
         <span id="caseListStatus" class="note"></span>
       </div>
-      <p class="note" style="margin-top:10px;margin-bottom:0;">💡 画面幅に収まらない場合は表の中を左右にスクロールできます（お客様名・削除ボタンは常に表示されたままです）。</p>
       <div style="overflow-x:auto;margin-top:10px;">
-        <table class="htbl case-tbl" style="min-width:960px;">
+        <table class="htbl case-tbl" style="min-width:820px;">
           <thead><tr>
-            <th>お客様名</th><th>作成者</th><th>購入日</th><th>品目概要</th><th style="text-align:right;">購入金額</th><th>年度限度額</th><th>進捗状況</th><th>適合確認PDF</th><th></th><th></th>
+            <th>お客様名</th><th>作成者</th><th>購入日</th><th>品目概要</th><th style="text-align:right;">購入金額</th><th>年度限度額</th><th>進捗状況</th><th>操作</th>
           </tr></thead>
           <tbody id="caseListBody"></tbody>
         </table>
@@ -487,6 +486,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
   <button class="btn bg" id="invoiceBtn" onclick="generateInvoice()">🧾 納品・請求書を出力</button>
   <button class="btn bg" id="conformityBtn" onclick="generateConformitySheet()">📋 適合確認シートを出力</button>
   <button class="btn bg" id="savePdfBtn" onclick="saveConformityPdfToCase()">📄 適合確認シートをPDF保存（案件に添付）</button>
+  <a id="currentPdfLink" href="#" target="_blank" rel="noopener" class="btn bg" style="display:none;text-decoration:none;">📄 保存済みPDFを開く</a>
   <button class="btn bg" id="receiptBtn" onclick="generateReceipt()">🧾 領収証を出力</button>
   <button class="btn bp" id="outBtn" onclick="generateExcel()">📥 Excelファイルを出力する</button>
 </div>
@@ -876,7 +876,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-10-01-3";
+const APP_VERSION = "2026-10-02";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -906,6 +906,7 @@ function loadDeviceLabelUI(){
 const GAS_URL_STORAGE = "asport_shinsei_gas_url";
 let caseListCache = [];   // 直近に取得した案件一覧（案件一覧表示・年度限度額の集計に使用）
 let currentCaseId = "";   // 現在フォームに読み込まれている案件のID（空なら新規未保存）
+let currentCasePdfUrl = ""; // 現在フォームに読み込まれている案件の、保存済み適合確認シートPDFのURL（無ければ空）
 let currentCaseStatus = ""; // 現在の案件の進捗状況（保存時に維持する）
 
 function toggleCaseListPanel(){
@@ -1141,7 +1142,7 @@ function renderCaseList(){
     .filter(c => !q || (c.customerName||"").includes(q))
     .sort((a,b) => (b.updatedAt||"").localeCompare(a.updatedAt||""));
   if (!rows.length){
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:#888;">該当する案件がありません</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#888;">該当する案件がありません</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(c => {
@@ -1160,9 +1161,9 @@ function renderCaseList(){
       prev ? `<button type="button" class="btn bg" onclick="updateCaseStatus('${c.caseId}','${prev}')" title="一つ前の状態に戻す">◀ 戻す</button>` : ""
     ].join("");
     const doneNote = c.status === "完了" ? `<div class="status-done-note">✅ 完了</div>` : "";
-    const pdfCell = c.pdfUrl
-      ? `<a href="${xmlEscape(c.pdfUrl)}" target="_blank" rel="noopener">📄 開く</a>`
-      : `<span style="color:#aaa;font-size:12px;">未保存</span>`;
+    // 適合確認PDF列は一覧から削除し（2026-10-02、「読み込んでから表示でもいいかも」との要望）、
+    // 案件を読み込んだ後にフォーム側の「📄 保存済みPDFを開く」ボタン（updateCurrentPdfLinkUI）で確認する形にした。
+    // また「読み込む」「削除」の2列を1列にまとめ、削除は誤操作しにくいよう小さく控えめなボタンにした
     return `<tr>
       <td>${xmlEscape(c.customerName||"")}</td>
       <td>${xmlEscape(c.staff||"-")}</td>
@@ -1171,9 +1172,12 @@ function renderCaseList(){
       <td style="text-align:right;">￥${fmtN(c.purchaseAmount||0)}</td>
       <td style="font-size:12px;">${limText}</td>
       <td>${statusBadgeHtml(c.status)}${doneNote}<div class="status-btns">${btns}</div></td>
-      <td style="text-align:center;">${pdfCell}</td>
-      <td><button class="btn bg" style="padding:5px 10px;min-width:auto;font-size:12px;" onclick="loadCaseById('${c.caseId}')">📂 読み込む</button></td>
-      <td><button type="button" class="btn bg" style="padding:5px 10px;min-width:auto;font-size:12px;color:var(--danger, #c0392b);" onclick="deleteCaseById('${c.caseId}','${xmlEscape(c.customerName||'').replace(/'/g,"\\'")}')">🗑 削除</button></td>
+      <td>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;">
+          <button class="btn bg" style="padding:5px 10px;min-width:auto;font-size:12px;" onclick="loadCaseById('${c.caseId}')">📂 読み込む</button>
+          <button type="button" style="padding:2px 6px;min-width:auto;font-size:10px;border:1px solid var(--border);border-radius:5px;background:transparent;color:var(--danger, #c0392b);cursor:pointer;opacity:.75;" onclick="deleteCaseById('${c.caseId}','${xmlEscape(c.customerName||'').replace(/'/g,"\\'")}')">🗑 削除</button>
+        </div>
+      </td>
     </tr>`;
   }).join("");
 }
@@ -1329,6 +1333,20 @@ function restoreItemReasonState(n, saved){
 }
 
 // 保存済みの案件データ（formData）をフォームへ復元する
+// 現在フォームに読み込まれている案件の、保存済み適合確認シートPDFへのリンクボタンの表示/非表示を切り替える。
+// 案件一覧テーブルからは適合確認PDF列を削除した（2026-10-02、「読み込んでから表示でもいいかも」との
+// 要望を受け、常に一覧に出すのではなく案件を読み込んだ後にフォーム側のボタンとして出す方式に変更）
+function updateCurrentPdfLinkUI(){
+  const el = document.getElementById('currentPdfLink');
+  if (!el) return;
+  if (currentCasePdfUrl){
+    el.href = currentCasePdfUrl;
+    el.style.display = 'inline-flex';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
 function loadCaseIntoForm(rec){
   const data = rec && rec.formData;
   if (!data){ toast("❌ この案件のフォームデータが見つかりません", false); return; }
@@ -1389,6 +1407,8 @@ function loadCaseIntoForm(rec){
   toggleSeihoFields();
   currentCaseId = rec.caseId || "";
   currentCaseStatus = rec.status || "入力中";
+  currentCasePdfUrl = rec.pdfUrl || "";
+  updateCurrentPdfLinkUI();
   const savedInfo = (data.savedByDevice || data.savedAppVersion)
     ? `（前回保存：${data.savedByDevice || '端末不明'} / ver ${data.savedAppVersion || '不明'}）`
     : '';
@@ -2519,6 +2539,8 @@ function clearForm(){
   });
   currentCaseId = '';
   currentCaseStatus = '';
+  currentCasePdfUrl = '';
+  updateCurrentPdfLinkUI();
   const t = new Date();
   document.getElementById('aY').value = t.getFullYear();
   document.getElementById('aM').value = t.getMonth()+1;
@@ -2875,6 +2897,84 @@ function setOrCreateCellStyleInXml_(xml, ref, styleIndex){
 // セル自体が存在せず書式(罫線)が未定義だった箇所があるため、同じ列位置にある
 // 基準行(品名行=12行目・メーカー名行=13行目)の書式をコピーして補完する。
 // これを行わないと、該当列の罫線が実在のセルを持たず「線が途中で切れる」不具合になる。
+// 罫線の一部に黒の細線を全方向(上下左右)冗長に明示指定した新しい書式を追加/再利用し、そのborderIdを返す。
+// 既に同一内容の罫線定義があればそれを再利用し、無駄に増やさない
+function findOrAddBorder_(stylesXml, borderXml){
+  const bdM = stylesXml.match(/<borders count="(\d+)">([\s\S]*?)<\/borders>/);
+  const borders = bdM[2].match(/<border\b[^>]*?(?:\/>|>[\s\S]*?<\/border>)/g) || [];
+  const existingIdx = borders.indexOf(borderXml);
+  if (existingIdx !== -1) return { xml: stylesXml, borderId: existingIdx };
+  const newId = borders.length;
+  const newXml = stylesXml.replace(bdM[0], `<borders count="${newId+1}">${bdM[2]}${borderXml}</borders>`);
+  return { xml: newXml, borderId: newId };
+}
+
+// baseXfIndexが持つ罫線以外の書式（フォント・塗りつぶし・配置・数値書式等）はそのまま維持し、
+// 罫線だけを指定のborderIdへ差し替えた新しいセルスタイルを追加し、その書式IDを返す
+function findOrAddXfWithBorderId_(stylesXml, baseXfIndex, borderId){
+  const xfM = stylesXml.match(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/);
+  const xfs = xfM[2].match(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g) || [];
+  const baseXf = xfs[baseXfIndex];
+  if (!baseXf) return null;
+  let newXf = /borderId="\d+"/.test(baseXf)
+    ? baseXf.replace(/borderId="\d+"/, `borderId="${borderId}"`)
+    : baseXf.replace(/^<xf\b/, `<xf borderId="${borderId}"`);
+  if (!/applyBorder="1"/.test(newXf)) newXf = newXf.replace(/^<xf\b/, "<xf applyBorder=\"1\"");
+  const newIndex = xfs.length;
+  const newXmlOut = stylesXml.replace(xfM[0], `<cellXfs count="${newIndex+1}">${xfM[2]}${newXf}</cellXfs>`);
+  return { xml: newXmlOut, index: newIndex };
+}
+
+// 【2026-10-02】ユーザーが実機Excelで「明細表の罫線が片側だけ定義されていると実際の印刷で欠けることがある」
+// 問題を手作業で直した結果（D〜K列の内側区切り線を除く全列・全行に、上下左右とも黒の細線を冗長に
+// 明示指定する方式）をもとに、同じ内容を自動生成でも再現する関数。XML仕様上は片側だけの指定でも
+// 正しいはずだが、実機Excel印刷では確実性に欠けることが2回の実例（2026-10-01の修正・2026-10-02の
+// 再報告）で分かったため、以後は常にこの「冗長な全方向指定」方式を使う
+async function forceRobustInvoiceBorders_(zip, xml){
+  const stylesFile = zip.file("xl/styles.xml");
+  if (!stylesFile) return xml;
+  let stylesXml = await stylesFile.async("string");
+  const BLACK = '<color indexed="64"/>';
+  const FULL_BOX = `<border><left style="thin">${BLACK}</left><right style="thin">${BLACK}</right><top style="thin">${BLACK}</top><bottom style="thin">${BLACK}</bottom><diagonal/></border>`;
+  const NAME_ROW_DK = `<border><left style="thin">${BLACK}</left><right style="thin">${BLACK}</right><top style="thin">${BLACK}</top><bottom/><diagonal/></border>`;
+  const MAKER_ROW_DK = `<border><left style="thin">${BLACK}</left><right style="thin">${BLACK}</right><top/><bottom style="thin">${BLACK}</bottom><diagonal/></border>`;
+
+  let r = findOrAddBorder_(stylesXml, FULL_BOX); stylesXml = r.xml; const fullBoxId = r.borderId;
+  r = findOrAddBorder_(stylesXml, NAME_ROW_DK); stylesXml = r.xml; const nameDkId = r.borderId;
+  r = findOrAddBorder_(stylesXml, MAKER_ROW_DK); stylesXml = r.xml; const makerDkId = r.borderId;
+
+  const cols = ["B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","AA","AB","AC","AD","AE"];
+  const dkCols = new Set(["D","E","F","G","H","I","J","K"]);
+  const nameRows = [12,14,16,18,20], makerRows = [13,15,17,19,21];
+  const cache = {};
+
+  function applyBorderId(ref, borderId){
+    const baseId = getCellStyleId_(xml, ref);
+    const effectiveBaseId = baseId === null ? 0 : baseId; // セル自体が無い場合は標準スタイル(0)を基準に新規作成する
+    const key = effectiveBaseId + ":" + borderId;
+    if (cache[key] === undefined){
+      const res = findOrAddXfWithBorderId_(stylesXml, effectiveBaseId, borderId);
+      if (!res) return;
+      stylesXml = res.xml;
+      cache[key] = res.index;
+    }
+    xml = setOrCreateCellStyleInXml_(xml, ref, cache[key]);
+  }
+
+  for (const rr of nameRows){
+    for (const col of cols){
+      applyBorderId(col + rr, dkCols.has(col) ? nameDkId : fullBoxId);
+    }
+  }
+  for (const rr of makerRows){
+    for (const col of cols){
+      applyBorderId(col + rr, dkCols.has(col) ? makerDkId : fullBoxId);
+    }
+  }
+
+  zip.file("xl/styles.xml", stylesXml);
+  return xml;
+}
 function fillMissingItemRowCells_(xml){
   const cols = ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA','AB','AC','AD','AE'];
   const nameRows = [14,16,18,20], makerRows = [15,17,19,21];
@@ -3894,6 +3994,9 @@ async function generateInvoice(){
     xml = normalizeInvoiceTableBorders_(xml);
     // 内訳（商品）列だけに入る点線の区切り線を消し、他の列と同じ見た目に揃える
     xml = await removeDetailInnerRule_(zip, xml);
+    // 【2026-10-02】片側だけの罫線指定は実機Excel印刷で欠けることがあるため、
+    // D〜K列の内側区切り線を除く全列・全行に黒の細線を上下左右とも冗長に明示指定し直す
+    xml = await forceRobustInvoiceBorders_(zip, xml);
     // 2枚目(副本)の罫線を、整え終わった1枚目(正本)と完全に同一になるよう複製する
     xml = mirrorInvoiceCopy2Borders_(xml);
 
@@ -4132,6 +4235,8 @@ async function saveConformityPdfToCase(){
     });
     const rec = caseListCache.find(c => c.caseId === currentCaseId);
     if (rec) rec.pdfUrl = data.pdfUrl;
+    currentCasePdfUrl = data.pdfUrl || "";
+    updateCurrentPdfLinkUI();
     renderCaseList();
     toast('✅ PDFをGoogleドライブに保存しました（📋 案件一覧からご確認いただけます）');
   } catch(e){
