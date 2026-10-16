@@ -163,7 +163,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
     <div>
       <h1>介護保険 福祉用具購入費支給申請書</h1>
       <p>受領委任払い用 ／ 自動入力フォーム（福山市）</p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-02　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-17-5　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -200,6 +200,15 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
       <button class="btn bg" style="border:1px solid var(--border);margin-top:8px;" onclick="saveGasUrl()">保存</button>
       <button class="btn bg" style="border:1px solid var(--border);margin-top:8px;" onclick="testGasConnection()">🔌 接続テスト</button>
       <div id="gasUrlStatus" class="note" style="margin-top:8px;"></div>
+      <hr style="margin:16px 0;border:none;border-top:1px solid var(--border);">
+      <div class="grid">
+        <div class="f s2"><label>在庫システム（デモ商品管理）のURL ― 共通商品マスターを品目の検索に使う</label><input type="text" id="zaikoUrlInput" placeholder="https://script.google.com/macros/s/xxxxx/exec"></div>
+        <div class="f"><label>在庫システムの合言葉</label><input type="password" id="zaikoTokenInput" placeholder="在庫システムの⚙設定と同じ合言葉"></div>
+      </div>
+      <button class="btn bg" style="border:1px solid var(--border);margin-top:8px;" onclick="saveZaikoSettings()">保存</button>
+      <button class="btn bg" style="border:1px solid var(--border);margin-top:8px;" onclick="loadSharedMaster_(true)">🔄 共通商品マスターを読み込む</button>
+      <div id="zaikoStatus" class="note" style="margin-top:8px;"></div>
+      <p class="note" style="margin-top:8px;">登録すると、品目の検索欄で在庫システムの商品（JAN・商品名・型番・種目・上代）が探せるようになります。検索欄でバーコードを読むと、その商品がそのまま入ります。</p>
       <hr style="margin:16px 0;border:none;border-top:1px solid var(--border);">
       <div class="grid">
         <div class="f s2"><label>この端末のラベル（不具合報告時の特定用。例：受付PC／田中タブレット）</label><input type="text" id="deviceLabelInput" placeholder="端末-XXXX"></div>
@@ -336,8 +345,9 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
             <option value="2">2割</option>
             <option value="3">3割</option>
             <option value="seiho">生活保護（介護扶助・本人負担なし）</option>
+            <option value="self">一般販売（介護保険を使わない・全額ご負担）</option>
           </select>
-          <div class="note">※生活保護（介護扶助）受給者の場合は「生活保護」を選択してください。⑥欄に追加書類の出力欄が表示されます。</div>
+          <div class="note">※生活保護（介護扶助）受給者の場合は「生活保護」を選択してください。⑥欄に追加書類の出力欄が表示されます。<br>※特定福祉用具以外の商品を販売するとき（介護保険を使わないとき）は「一般販売」を選択してください。納品・請求書と領収証だけを出します（申請書は作りません）。</div>
         </div>
         <div class="f">
           <label>支給限度額の残り（円）<span class="note">※福祉用具購入費の年間上限は10万円。今年度すでに他の品目で使った分があれば差し引いた残額を入力</span></label>
@@ -876,7 +886,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-10-02";
+const APP_VERSION = "2026-10-17-5";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -906,6 +916,7 @@ function loadDeviceLabelUI(){
 const GAS_URL_STORAGE = "asport_shinsei_gas_url";
 let caseListCache = [];   // 直近に取得した案件一覧（案件一覧表示・年度限度額の集計に使用）
 let currentCaseId = "";   // 現在フォームに読み込まれている案件のID（空なら新規未保存）
+let currentCaseSavedAt = ""; // 読み込んだ（または自分が保存した）時点の案件の保存日時。保存時に、他の端末が後から保存していないかの確認に使う
 let currentCasePdfUrl = ""; // 現在フォームに読み込まれている案件の、保存済み適合確認シートPDFのURL（無ければ空）
 let currentCaseStatus = ""; // 現在の案件の進捗状況（保存時に維持する）
 
@@ -968,6 +979,67 @@ async function gasPost(action, payload){
   return data;
 }
 
+// ============================================================
+// 共通商品マスター（在庫システム＝デモ商品管理のGASが持つ商品データ）
+// 在庫システムのウェブアプリに {action:'masterList', token:合言葉} を送ると全商品が返る。
+// 品目の検索（onCatalogSearch）で、CATALOG_DBと並べて使う。JANで引けるので、バーコードを読めばそのまま入る。
+// 価格は上代（税抜）で持っているので、購入金額（税込）には×1.1して入れる。
+// 端末に控えを保存しておき、通信できない時もその控えで検索できる。
+// ============================================================
+const ZAIKO_URL_STORAGE = "asport_zaiko_url";
+const ZAIKO_TOKEN_STORAGE = "asport_zaiko_token";
+const SHARED_MASTER_CACHE = "asport_shared_master_cache";
+let SHARED_MASTER = [], sharedByJan = new Map(), sharedLoadedAt = "";
+function getZaikoUrl(){ return (localStorage.getItem(ZAIKO_URL_STORAGE) || "").trim(); }
+function loadZaikoUI(){
+  const u = document.getElementById("zaikoUrlInput"), t = document.getElementById("zaikoTokenInput");
+  if (u) u.value = getZaikoUrl();
+  if (t) t.value = localStorage.getItem(ZAIKO_TOKEN_STORAGE) || "";
+}
+function saveZaikoSettings(){
+  localStorage.setItem(ZAIKO_URL_STORAGE, g("zaikoUrlInput"));
+  localStorage.setItem(ZAIKO_TOKEN_STORAGE, document.getElementById("zaikoTokenInput").value || "");
+  loadSharedMaster_(true);
+}
+function sharedShumoku_(m){ const s = String((m && m.shumoku) || "").trim(); return s === "対象外" ? "" : s; }
+function sharedPriceTaxIn_(m){ const r = (m && m.retail !== "" && m.retail != null) ? Number(m.retail) : NaN; return isNaN(r) || r <= 0 ? null : Math.round(r * 1.1); }
+function setSharedMaster_(list, at){
+  SHARED_MASTER = (list || []).filter(m => m && m.name && !String(m.name).startsWith("【名称未入力】"));
+  sharedByJan = new Map();
+  SHARED_MASTER.forEach(m => { if (m.jan) sharedByJan.set(String(m.jan), m); });
+  sharedLoadedAt = at || "";
+}
+async function loadSharedMaster_(verbose){
+  const s = document.getElementById("zaikoStatus");
+  if (!SHARED_MASTER.length){
+    try { const c = JSON.parse(localStorage.getItem(SHARED_MASTER_CACHE) || "null"); if (c && Array.isArray(c.list)) setSharedMaster_(c.list, c.at); } catch(e){}
+  }
+  const url = getZaikoUrl();
+  if (!url){ if (verbose && s){ s.textContent = "⚠ 在庫システムのURLが未設定です"; s.style.color = "var(--danger, #c0392b)"; } return; }
+  if (verbose && s){ s.textContent = "読み込み中..."; s.style.color = ""; }
+  try {
+    const res = await fetch(url, { method:"POST", headers:{ "Content-Type":"text/plain;charset=utf-8" },
+      body: JSON.stringify({ action:"masterList", token: localStorage.getItem(ZAIKO_TOKEN_STORAGE) || "" }) });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "通信エラー");
+    const slim = (data.master || []).map(m => ({ key:m.key, jan:m.jan||"", name:m.name||"", model:m.model||"", maker:m.maker||"", shumoku:m.shumoku||"", tais:m.tais||"", retail:m.retail, cost:m.cost, webcd:m.webcd||"", photo:(String(m.photo||"").startsWith("http") ? m.photo : "") }));
+    const at = new Date().toLocaleString("ja-JP");
+    setSharedMaster_(slim, at);
+    try { localStorage.setItem(SHARED_MASTER_CACHE, JSON.stringify({ at, list: slim })); } catch(e){}
+    if (verbose && s){
+      const n = SHARED_MASTER.filter(m => sharedShumoku_(m)).length;
+      s.textContent = `✅ 共通商品マスターを読み込みました（${SHARED_MASTER.length}件、うち特定福祉用具の種目あり ${n}件）`; s.style.color = "var(--success)";
+    }
+  } catch(err){
+    if (verbose && s){ s.textContent = "❌ 読み込めませんでした：" + err.message + (SHARED_MASTER.length ? `（前回の控え ${SHARED_MASTER.length}件で検索できます）` : ""); s.style.color = "var(--danger, #c0392b)"; }
+  }
+}
+
+// 一般販売（介護保険を使わない・全額ご負担）かどうか。④欄の利用者負担割合で「一般販売」を選んだ案件
+function isGeneralSale(){ return g("burdenRatio") === "self"; }
+const GENERAL_SALE_MARK = "【一般販売】";
+function isGeneralSaleCase_(c){ return String((c && c.itemSummary) || "").startsWith(GENERAL_SALE_MARK); }
+
 // 購入日文字列（YYYY/M/D・YYYY-M-D等）から年度（4月始まり）を算出
 function fiscalYearOf(dateStr){
   if (!dateStr) return null;
@@ -982,7 +1054,7 @@ function customerRemainingLimit(customerName, fiscalYear, excludeCaseId){
   if (!customerName || fiscalYear === null || fiscalYear === undefined) return null;
   let sum = 0, found = false;
   caseListCache.forEach(c => {
-    if (c.customerName === customerName && c.caseId !== excludeCaseId && fiscalYearOf(c.purchaseDate) === fiscalYear) {
+    if (c.customerName === customerName && c.caseId !== excludeCaseId && fiscalYearOf(c.purchaseDate) === fiscalYear && !isGeneralSaleCase_(c)) {
       sum += Number(c.purchaseAmount) || 0;
       found = true;
     }
@@ -1103,7 +1175,15 @@ const STATUS_FLOW = [
 const STATUS_INDEX = new Map(STATUS_FLOW.map((s,i) => [s.key, i]));
 
 // 現在のステータスから押せる「次へ進める」ボタンの一覧を返す（通常は1つ、入力中の直後だけ2つに分岐）
-function nextStatusOptions(status){
+const GENERAL_SALE_SKIP = ["市役所提出", "市役所受理", "モニタリング", "PDF保存"];
+function nextStatusOptions(status, rec){
+  const general = rec && isGeneralSaleCase_(rec);
+  if (general && STATUS_INDEX.has(status) && status !== "入力中"){
+    let i = STATUS_INDEX.get(status) + 1;
+    while (i < STATUS_FLOW.length && GENERAL_SALE_SKIP.includes(STATUS_FLOW[i].key)) i++;
+    if (i >= STATUS_FLOW.length) return [];
+    return [{ label: `⏩ 次へ（${STATUS_FLOW[i].label}）`, to: STATUS_FLOW[i].key }];
+  }
   if (!STATUS_INDEX.has(status)){
     // 未知の値（旧ステータスの移行漏れ等）は安全側として入力中と同じ扱いにする
     status = "入力中";
@@ -1121,10 +1201,11 @@ function nextStatusOptions(status){
 
 // 「◀ 戻す」で一つ前のステータスに戻す（誤操作の訂正用。商品あり／ナシの分岐を経由した場合でも
 // 一律で1つ前の段階に戻す簡易的な実装で、案件ごとの経路までは記録していない）
-function prevStatusOf(status){
+function prevStatusOf(status, rec){
   if (!STATUS_INDEX.has(status)) return null;
   const idx = STATUS_INDEX.get(status);
   if (idx <= 0) return null;
+  if (rec && isGeneralSaleCase_(rec)){ let i = idx - 1; while (i > 0 && GENERAL_SALE_SKIP.includes(STATUS_FLOW[i].key)) i--; return STATUS_FLOW[i].key; }
   return STATUS_FLOW[idx-1].key;
 }
 
@@ -1154,8 +1235,8 @@ function renderCaseList(){
         ? `${fy}年度：残り￥${fmtN(lim.remaining)}`
         : `${fy}年度：超過￥${fmtN(-lim.remaining)}`;
     }
-    const nextOpts = nextStatusOptions(c.status);
-    const prev = prevStatusOf(c.status);
+    const nextOpts = nextStatusOptions(c.status, c);
+    const prev = prevStatusOf(c.status, c);
     const btns = [
       ...nextOpts.map(opt => `<button type="button" class="btn bg" onclick="updateCaseStatus('${c.caseId}','${opt.to}')">${opt.label}</button>`),
       prev ? `<button type="button" class="btn bg" onclick="updateCaseStatus('${c.caseId}','${prev}')" title="一つ前の状態に戻す">◀ 戻す</button>` : ""
@@ -1263,7 +1344,7 @@ window.addEventListener('beforeunload', (e) => {
 function serializeFormState(){
   const values = {};
   document.querySelectorAll("input[id], select[id], textarea[id]").forEach(el => {
-    if (["apiKeyInput","apiModelInput","gasUrlInput","caseListSearch","deviceLabelInput"].includes(el.id)) return;
+    if (["apiKeyInput","apiModelInput","gasUrlInput","caseListSearch","deviceLabelInput","zaikoUrlInput","zaikoTokenInput"].includes(el.id)) return;
     if (el.type === "file" || el.type === "checkbox") return;
     values[el.id] = el.value;
   });
@@ -1294,7 +1375,7 @@ function serializeFormState(){
     const d = selectedItemData[n];
     if (!d) return;
     if (d.presetGroupKey){
-      selectedItemDataSaved[n] = { presetGroupKey: d.presetGroupKey, presetItemName: d.presetItemName };
+      selectedItemDataSaved[n] = { presetGroupKey: d.presetGroupKey, presetItemName: d.presetItemName, listPrice: d.listPrice, costExTax: d.costExTax, jan: d.jan, masterKey: d.masterKey };
       return;
     }
     const { catalogPages, ...rest } = d;
@@ -1385,6 +1466,7 @@ function loadCaseIntoForm(rec){
       const found = group && group.items.find(it => it.name === item.presetItemName);
       if (!found) return;
       restored = Object.assign({}, found, { presetGroupKey: item.presetGroupKey, presetItemName: item.presetItemName });
+      ['listPrice','costExTax','jan','masterKey'].forEach(k => { if (item[k] != null && item[k] !== '') restored[k] = item[k]; });
     } else {
       // カタログ検索選択品目：catalogPages（カタログページ画像）は保存時に容量削減のため
       // 除外しているので、catalogSourceを手がかりに、現在のCATALOG_PAGESから同じページ画像群を引き直す
@@ -1406,6 +1488,7 @@ function loadCaseIntoForm(rec){
   onStaffSelectChange("cfCheckStaff","cfCheckStaffOther");
   toggleSeihoFields();
   currentCaseId = rec.caseId || "";
+  currentCaseSavedAt = data.savedAt || "";
   currentCaseStatus = rec.status || "入力中";
   currentCasePdfUrl = rec.pdfUrl || "";
   updateCurrentPdfLinkUI();
@@ -1433,18 +1516,21 @@ function flashCaseLoadedFeedback(){
 
 // 現在の入力内容を案件として新規保存／既存案件の更新を行う
 async function saveCurrentCase(){
-  const items = collectInvoiceItems();
+  const items = collectInvoiceItems(true);
   if (!items.length){ toast("⚠ 品目が選択されていません。先に福祉用具を選択してください", false); return; }
   const custName = g("name");
   if (!custName){ toast("⚠ お客様氏名を入力してください", false); return; }
   if (!getGasUrl()){ toast("⚠ 案件管理システムのURLが未設定です（⚙設定パネルで登録してください）", false); return; }
 
   const purchaseDate = items[0].dateStr || "";
-  const itemSummary = items.map(it => it.name || "").join("・");
+  const itemSummary = (isGeneralSale() ? GENERAL_SALE_MARK : "") + items.map(it => it.name || "").join("・");
   const purchaseAmount = items.reduce((s,it) => s + (it.price||0), 0);
   const ratioRaw = g("burdenRatio");
   let userBurdenAmount = "", insurancePayAmount = "";
-  if (ratioRaw) {
+  if (ratioRaw === 'self') {
+    // 一般販売（介護保険を使わない）：全額お客様負担・保険給付なし
+    userBurdenAmount = purchaseAmount; insurancePayAmount = 0;
+  } else if (ratioRaw) {
     // 生活保護（介護扶助）の場合は本人負担なし（0割）として扱う
     const ratio = ratioRaw === 'seiho' ? 0 : parseInt(ratioRaw,10);
     const limitRemainRaw = g("receiptLimitRemain");
@@ -1464,12 +1550,28 @@ async function saveCurrentCase(){
     status: currentCaseStatus || "入力中",
     formData: serializeFormState()
   };
+  // 同じ案件を、開いたあとで別の端末が保存していないか確認する（時間差で品目の追加などが入ることがあるため）。
+  // 気づかずに保存すると、後から保存した方の内容で上書きされ、先に保存された変更が消えてしまう
+  if (currentCaseId){
+    try {
+      const latest = await gasFetch("get", { id: currentCaseId });
+      const fd = latest && latest.case && latest.case.formData;
+      const remoteAt = (fd && fd.savedAt) || "";
+      if (remoteAt && remoteAt !== currentCaseSavedAt){
+        const who = (fd && fd.savedByDevice) || "端末不明";
+        const when = new Date(remoteAt).toLocaleString("ja-JP", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" });
+        const ok = confirm(`⚠ この案件は、あなたが開いたあとで別の端末が保存しています。\n（${who}　${when}）\n\nこのまま保存すると、その変更（品目の追加など）は消えてしまいます。\n\nOK：このまま上書き保存する\nキャンセル：保存をやめる（「📂 読み込む」で最新を開き直してから、追加分を入れ直してください）`);
+        if (!ok){ toast("保存をやめました。案件一覧から読み込み直して、最新の内容を確認してください", false); return; }
+      }
+    } catch(e){ /* 確認できなくても保存は続ける（通信が不安定なときに保存できなくなるのを避ける） */ }
+  }
   const btn = document.getElementById("saveCaseBtn");
   const orig = btn ? btn.textContent : "";
   if (btn){ btn.textContent = "⏳ 保存中..."; btn.disabled = true; }
   try{
     const data = await gasPost("save", { case: payload });
     currentCaseId = data.caseId;
+    currentCaseSavedAt = payload.formData.savedAt || "";
     currentCaseStatus = payload.status;
     toast("✅ 案件を保存しました（" + custName + "）");
     refreshCaseList();
@@ -1773,7 +1875,7 @@ function buildItems() {
         <div class="preset-section">
           <div class="preset-label">⚡ 商品を選択して自動入力</div>
           <div class="catalog-search">
-            <input type="text" id="catalogSearch${n}" placeholder="🔍 品番・商品名で検索（例：402921、UST-130N、シャワーチェア）" autocomplete="off" oninput="onCatalogSearch(${n})" onfocus="onCatalogSearch(${n})">
+            <input type="text" id="catalogSearch${n}" placeholder="🔍 品番・商品名・JANで検索（バーコードを読んでもOK）" autocomplete="off" oninput="onCatalogSearch(${n})" onfocus="onCatalogSearch(${n})" onkeydown="onCatalogSearchKey(event, ${n})">
             <div class="catalog-results" id="catalogResults${n}"></div>
           </div>
           <div class="preset-cards" id="pcards${n}"></div>
@@ -1835,6 +1937,22 @@ function buildItems() {
   addBtn.textContent = '＋ 品目を追加（同時に複数の福祉用具を購入する場合のみ）';
   addBtn.onclick = addNextItemBlock;
   container.parentNode.insertBefore(addBtn, container.nextSibling);
+  // 一般販売（介護保険を使わない）のときだけ出す：値引き・送料・粗利
+  const gs = document.createElement('div');
+  gs.id = 'gsBox';
+  gs.style.cssText = 'display:none;margin-top:14px;border:1.5px solid #0369a1;border-radius:10px;padding:14px;background:#f3f9fd;';
+  gs.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+      <b style="font-size:14px;color:#0369a1;">💴 一般販売の価格（値引き・送料・粗利）</b>
+      <span style="flex:1"></span>
+      <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin:0;white-space:nowrap;"><input type="checkbox" id="gsShowProfit" onchange="renderGeneralSaleBox()" style="width:auto;margin:0;"> 仕入・粗利を表示<span class="note">（お客様に見せるときは外す）</span></label>
+    </div>
+    <div id="gsRows"></div>
+    <div class="grid" style="margin-top:8px;">
+      <div class="f"><label>送料（税込・円）<span class="note">　0なら請求書に載りません</span></label><input type="number" id="gsShipping" min="0" step="10" placeholder="0" oninput="renderGeneralSaleTotals_()"></div>
+    </div>
+    <div id="gsTotals" style="margin-top:8px;font-size:13px;"></div>`;
+  addBtn.parentNode.insertBefore(gs, addBtn.nextSibling);
+  [1,2,3].forEach(n => { const p = document.getElementById(`i${n}p`); if (p) p.addEventListener('input', () => { if (!gsSyncing_) renderGeneralSaleBox(); }); });
 }
 
 let visibleItemCount = 1;
@@ -1842,6 +1960,7 @@ let visibleItemCount = 1;
 // パンフレット資料出力時に参照する
 let selectedItemData = {};
 function updateDeleteButtons(){
+  setTimeout(renderGeneralSaleBox, 0);
   [2,3].forEach(n => {
     const btn = document.getElementById(`delBtn${n}`);
     if (btn) btn.style.display = (n === visibleItemCount) ? '' : 'none';
@@ -1922,7 +2041,8 @@ function selectPreset(n, key, item, card) {
   // （presetGroupKey/presetItemName）も付与し、案件保存時はこの識別情報だけを保存して
   // 画像本体（imageUrl、数万文字規模になりうる）は保存しないようにする（serializeFormState/
   // loadCaseIntoForm側で、保存時はこの識別情報のみ・読込時はPRESETSから実体を引き直す）
-  selectedItemData[n] = Object.assign({}, item, { presetGroupKey: key, presetItemName: item.name });
+  selectedItemData[n] = Object.assign({}, item, { presetGroupKey: key, presetItemName: item.name, listPrice: item.price != null ? item.price : null });
+  renderGeneralSaleBox();
   // 写真・商品ページを自動表示
   showPresetPreview(n, item);
   // Update reason suggestion based on category
@@ -1964,31 +2084,107 @@ const CATALOG_CROPS = {
   '402921': { page: 0, xPct: 46.129, yPct: 9.578, wPct: 17.177, hPct: 5.530 }, // FX-30S 標準 402921/34,100円
 };
 
+// 検索結果（品目番号ごと）。Enterキー（バーコードリーダーは読み取りの最後にEnterを送る）で先頭を選ぶために保持
+const catalogSearchHits = {};
 function onCatalogSearch(n) {
   const input = document.getElementById(`catalogSearch${n}`);
   const box = document.getElementById(`catalogResults${n}`);
   const q = input.value.trim();
-  if (!q) { box.classList.remove('show'); box.innerHTML = ''; return; }
+  if (!q) { box.classList.remove('show'); box.innerHTML = ''; catalogSearchHits[n] = []; return; }
   const qLower = q.toLowerCase();
-  const matches = CATALOG_DB.filter(item => {
-    if (item.codes.some(c => c.toLowerCase().includes(qLower))) return true;
-    if (item.name.toLowerCase().includes(qLower)) return true;
-    if (item.maker.toLowerCase().includes(qLower)) return true;
-    return false;
-  }).slice(0, 20);
-  if (matches.length === 0) {
-    box.innerHTML = `<div class="catalog-result-empty">「${q}」に一致する商品が見つかりません</div>`;
+  const digits = q.replace(/[\s-]/g, '');
+  const isJan = /^(\d{8}|\d{13})$/.test(digits);
+  const catByCode = code => code ? CATALOG_DB.find(it => it.codes.includes(String(code))) : null;
+  let hits = [];
+  if (isJan && sharedByJan.has(digits)) {
+    // バーコード（JAN）：共通商品マスターから1件。カタログに同じ品番（ウェルファン品番）があればカタログの方を使う（パンフレットのページが付く）
+    const m = sharedByJan.get(digits), cat = catByCode(m.webcd);
+    hits = [cat ? { kind:'cat', item:cat, m } : { kind:'shared', m }];
   } else {
-    box.innerHTML = matches.map((item, idx) => `
+    const matches = CATALOG_DB.filter(item => {
+      if (item.codes.some(c => c.toLowerCase().includes(qLower))) return true;
+      if (item.name.toLowerCase().includes(qLower)) return true;
+      if (item.maker.toLowerCase().includes(qLower)) return true;
+      return false;
+    }).slice(0, 20);
+    const usedCodes = new Set();
+    matches.forEach(item => { item.codes.forEach(c => usedCodes.add(c)); const m = SHARED_MASTER.find(x => x.webcd && item.codes.includes(String(x.webcd))); hits.push({ kind:'cat', item, m: m || null }); });
+    if (SHARED_MASTER.length) {
+      SHARED_MASTER.filter(m => !(m.webcd && usedCodes.has(String(m.webcd))) &&
+        [m.name, m.model, m.maker, m.jan, m.webcd, m.tais].some(v => String(v || '').toLowerCase().includes(qLower)))
+        .slice(0, Math.max(0, 25 - hits.length)).forEach(m => hits.push({ kind:'shared', m }));
+    }
+  }
+  catalogSearchHits[n] = hits;
+  if (hits.length === 0) {
+    box.innerHTML = `<div class="catalog-result-empty">「${xmlEscape(q)}」に一致する商品が見つかりません${isJan ? '（このJANは共通商品マスターにありません）' : ''}</div>`;
+  } else {
+    box.innerHTML = hits.map((h, idx) => {
+      if (h.kind === 'cat') {
+        const item = h.item;
+        return `
       <div class="catalog-result-item" data-idx="${idx}">
         <div class="catalog-result-name">${item.name}</div>
-        <div class="catalog-result-sub">品番：${item.codes[0]}　／　${item.maker}　／　<span class="catalog-result-price">${item.price != null ? item.price.toLocaleString()+'円' : 'サイズにより価格が異なります'}</span></div>
-      </div>`).join('');
+        <div class="catalog-result-sub">品番：${item.codes[0]}　／　${item.maker}　／　<span class="catalog-result-price">${item.price != null ? item.price.toLocaleString()+'円' : 'サイズにより価格が異なります'}</span>${h.m && h.m.jan ? `　／　JAN ${xmlEscape(h.m.jan)}` : ''}</div>
+      </div>`;
+      }
+      const m = h.m, sm = sharedShumoku_(m), pr = sharedPriceTaxIn_(m);
+      return `
+      <div class="catalog-result-item" data-idx="${idx}">
+        <div class="catalog-result-name">${xmlEscape(m.name)} <span style="font-size:10px;color:#0369a1;border:1px solid #0369a166;border-radius:4px;padding:0 4px;">共通商品マスター</span></div>
+        <div class="catalog-result-sub">${m.jan ? 'JAN '+xmlEscape(m.jan)+'　／　' : ''}${m.model ? xmlEscape(m.model)+'　／　' : ''}${xmlEscape(m.maker || '')}　／　<span class="catalog-result-price">${pr != null ? pr.toLocaleString()+'円（税込）' : '価格未登録'}</span>　／　${sm ? '種目：'+xmlEscape(sm) : '<span style="color:#b45309;">特定福祉用具の対象外</span>'}</div>
+      </div>`;
+    }).join('');
     Array.from(box.querySelectorAll('.catalog-result-item')).forEach((el, idx) => {
-      el.addEventListener('mousedown', (e) => { e.preventDefault(); selectCatalogItem(n, matches[idx]); });
+      el.addEventListener('mousedown', (e) => { e.preventDefault(); pickCatalogHit_(n, hits[idx]); });
     });
   }
   box.classList.add('show');
+}
+function pickCatalogHit_(n, h){
+  if (!h) return;
+  if (h.kind === 'cat') { selectCatalogItem(n, h.item); if (h.m) attachSharedInfo_(n, h.m); }
+  else selectSharedItem(n, h.m);
+}
+function onCatalogSearchKey(e, n){
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  onCatalogSearch(n);
+  const hits = catalogSearchHits[n] || [];
+  if (hits.length) pickCatalogHit_(n, hits[0]);
+}
+// 共通商品マスターの識別情報（JAN・マスターのキー・TAIS）を品目に付けておく（納品確定で在庫を減らす連携用）
+function attachSharedInfo_(n, m){
+  if (!selectedItemData[n] || !m) return;
+  selectedItemData[n].jan = m.jan || '';
+  selectedItemData[n].masterKey = m.key || '';
+  selectedItemData[n].tais = m.tais || '';
+  if (m.cost != null && m.cost !== '') selectedItemData[n].costExTax = Number(m.cost);
+  renderGeneralSaleBox();
+}
+function selectSharedItem(n, m) {
+  document.querySelectorAll(`#pcards${n} .pcard`).forEach(c => c.classList.remove('selected'));
+  const type = sharedShumoku_(m), price = sharedPriceTaxIn_(m);
+  document.getElementById(`i${n}t`).value = type;
+  document.getElementById(`i${n}n`).value = m.name;
+  document.getElementById(`i${n}p`).value = price != null ? price : '';
+  if (m.maker) document.getElementById(`i${n}mk`).value = m.maker;
+  const cat = m.webcd ? CATALOG_DB.find(it => it.codes.includes(String(m.webcd))) : null;
+  let catalogCrop = null;
+  if (cat) { for (const c of cat.codes) { if (CATALOG_CROPS[c]) { catalogCrop = CATALOG_CROPS[c]; break; } } }
+  const adapted = { name: m.name, price: price, maker: m.maker || '', type: type, imageUrl: m.photo || '', productUrl: '',
+    catalogPages: cat ? (CATALOG_PAGES[cat.source] || []) : [], catalogCode: cat ? cat.codes[0] : (m.webcd || ''), catalogSource: cat ? cat.source : '',
+    catalogCrop: catalogCrop, alwaysFullPage: !!(cat && cat.alwaysFullPage), jan: m.jan || '', masterKey: m.key || '', tais: m.tais || '',
+    listPrice: price, costExTax: (m.cost != null && m.cost !== '') ? Number(m.cost) : null };
+  selectedItemData[n] = adapted;
+  showPresetPreview(n, adapted);
+  updateReasonSuggestion(n, CATALOG_TYPE_TO_KEY[type] || '', adapted);
+  const input = document.getElementById(`catalogSearch${n}`);
+  input.value = `${m.name}${m.jan ? '（JAN：'+m.jan+'）' : ''}`;
+  const box = document.getElementById(`catalogResults${n}`);
+  box.classList.remove('show'); box.innerHTML = '';
+  if (!type && !isGeneralSale()) toast('⚠ この商品は特定福祉用具の種目が登録されていません。介護保険の購入費の対象外なら④欄で「一般販売」を選んでください', false);
+  renderGeneralSaleBox();
 }
 
 function selectCatalogItem(n, dbItem) {
@@ -2003,8 +2199,10 @@ function selectCatalogItem(n, dbItem) {
   let catalogCrop = null;
   for (const c of dbItem.codes) { if (CATALOG_CROPS[c]) { catalogCrop = CATALOG_CROPS[c]; break; } }
   const adapted = { name: dbItem.name, price: dbItem.price, maker: dbItem.maker, type: dbItem.type, imageUrl: '', productUrl: '', catalogPages: catalogPages, catalogCode: dbItem.codes[0], catalogSource: dbItem.source, catalogCrop: catalogCrop, alwaysFullPage: !!dbItem.alwaysFullPage };
+  adapted.listPrice = dbItem.price != null ? dbItem.price : null;
   selectedItemData[n] = adapted;
   showPresetPreview(n, adapted);
+  renderGeneralSaleBox();
   const key = CATALOG_TYPE_TO_KEY[dbItem.type] || '';
   updateReasonSuggestion(n, key, adapted);
   const input = document.getElementById(`catalogSearch${n}`);
@@ -2534,10 +2732,10 @@ function toast(msg, ok=true){
 function clearForm(){
   if (!confirm('入力内容をすべてクリアしますか？')) return;
   document.querySelectorAll('input,textarea').forEach(el => {
-    if (el.id === 'apiKeyInput' || el.id === 'apiModelInput' || el.id === 'gasUrlInput' || el.id === 'deviceLabelInput') return; // APIキー・案件管理システムURL・端末ラベルの設定は保持
+    if (el.id === 'apiKeyInput' || el.id === 'apiModelInput' || el.id === 'gasUrlInput' || el.id === 'deviceLabelInput' || el.id === 'zaikoUrlInput' || el.id === 'zaikoTokenInput') return; // APIキー・案件管理システムURL・端末ラベルの設定は保持
     el.value='';
   });
-  currentCaseId = '';
+  currentCaseId = ''; currentCaseSavedAt = '';
   currentCaseStatus = '';
   currentCasePdfUrl = '';
   updateCurrentPdfLinkUI();
@@ -3024,6 +3222,7 @@ function fmt12(str){
 }
 
 function generateExcel(){
+  if (isGeneralSale()){ toast('⚠ 一般販売（介護保険を使わない）では申請書は作りません。納品・請求書と領収証を出力してください', false); return; }
   if (!validate()) return;
   const btn = document.getElementById('outBtn');
   btn.textContent='⏳ 生成中...'; btn.disabled=true;
@@ -3872,13 +4071,17 @@ async function refreshPopupContent_(popupWin){
 // ============================================================
 // 納品・請求書の出力
 // ============================================================
-function collectInvoiceItems(){
+function collectInvoiceItems(withShipping){
   const items = [];
   for (let n=1; n<=visibleItemCount; n++){
     const name = g(`i${n}n`), type = g(`i${n}t`), maker = g(`i${n}mk`), price = gi(`i${n}p`);
     const y = gi(`i${n}y`), m = gi(`i${n}m`), d = gi(`i${n}d`);
     if (!name && !price) continue;
     items.push({ n, name, type, maker, price, dateStr: (y&&m&&d) ? `${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}` : '' });
+  }
+  if (withShipping && isGeneralSale() && items.length){
+    const ship = gi('gsShipping');
+    if (ship > 0) items.push({ n: 'ship', name: '送料', type: '', maker: '', price: ship, unit: '式', dateStr: items[0].dateStr });
   }
   return items;
 }
@@ -3899,10 +4102,11 @@ function invoiceStaffLabel(fullName){
 }
 
 async function generateInvoice(){
-  const items = collectInvoiceItems();
+  const items = collectInvoiceItems(true);
   if (!items.length){ toast('⚠ 品目が選択されていません。先に福祉用具を選択してください', false); return; }
   const ratioRaw = g('burdenRatio');
   if (!ratioRaw){ toast('⚠ 利用者負担割合が未確認です。①欄で1〜3割を選択してから出力してください', false); return; }
+  const general = ratioRaw === 'self';
   const btn = document.getElementById('invoiceBtn');
   const origLabel = btn ? btn.textContent : '';
   if (btn){ btn.textContent = '⏳ 生成中...'; btn.disabled = true; }
@@ -3910,7 +4114,7 @@ async function generateInvoice(){
     const custName = g('name') || '（未入力）';
     const custAddr = g('addr') || '';
     // 生活保護（介護扶助）の場合は本人負担なし（0割）として扱う
-    const ratio = ratioRaw === 'seiho' ? 0 : parseInt(ratioRaw, 10);
+    const ratio = ratioRaw === 'seiho' ? 0 : general ? 10 : parseInt(ratioRaw, 10);
     const today = new Date();
     const [iy,im,id] = (items[0].dateStr || `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()}`).split('/').map(v=>parseInt(v,10));
     const bank = g('bankInfo');
@@ -3965,6 +4169,11 @@ async function generateInvoice(){
     set('B38', bank);
     setNum('N27', ratio);
     setNum('N56', ratio);
+    if (general){
+      // 一般販売：受領委任払いの説明文を消し、「10割負担分」を「全額」の表記にする（お支払い合計＝総合計）
+      ['B27','B28','B56','B57'].forEach(r => clear(r));
+      set('T27', '割（全額ご負担）'); set('T56', '割（全額ご負担）');
+    }
 
     items.slice(0,5).forEach((it,idx) => {
       const r1 = rows1[idx];
@@ -3981,7 +4190,7 @@ async function generateInvoice(){
         set(`D${r}`, it.name);
         set(`D${r+1}`, it.maker);
         setNum(`L${r}`, 1);
-        set(`M${r}`, '台');
+        set(`M${r}`, it.unit || '台');
         setNum(`N${r}`, it.price);
         setNum(`T${r}`, it.price); // 数量は常に1のため、税込金額＝単価
         if (dateVal) set(`B${r}`, dateVal);
@@ -4594,20 +4803,21 @@ const RECEIPT_LOGO_B64 = "/9j/4AAQSkZJRgABAQEA3ADcAAD/2wBDAAIBAQIBAQICAgICAgICAw
 const RECEIPT_ICON_B64 = "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"; // 単色シルエット化・中央1点配置用（2026-09-25差し替え）
 
 function generateReceipt(){
-  const items = collectInvoiceItems();
+  const items = collectInvoiceItems(true);
   if (!items.length){ toast('⚠ 品目が選択されていません。先に福祉用具を選択してください', false); return; }
   const ratioRaw = g('burdenRatio');
   if (!ratioRaw){ toast('⚠ 利用者負担割合が未確認です。①欄で1〜3割を選択してから出力してください', false); return; }
   const custName = g('name') || '（未入力）';
   // 生活保護（介護扶助）の場合は本人負担なし（0割）として扱う
-  const ratio = ratioRaw === 'seiho' ? 0 : parseInt(ratioRaw, 10);
+  const general = ratioRaw === 'self';
+  const ratio = ratioRaw === 'seiho' ? 0 : general ? 10 : parseInt(ratioRaw, 10);
   const total = items.reduce((s,it)=>s+it.price, 0);
   const limitRemainRaw = g('receiptLimitRemain');
   const limitRemain = (limitRemainRaw !== '' && !isNaN(parseInt(limitRemainRaw, 10))) ? parseInt(limitRemainRaw, 10) : 100000;
   const coveredAmount = Math.min(total, limitRemain);   // A：保険給付対象内金額（総額のうち限度額の範囲内）
   const userBurden = Math.ceil(coveredAmount * ratio / 10); // B：介護保険利用者負担額（A×負担割合）
   const overAmount = Math.max(0, total - limitRemain);  // C：支給限度額超過分（全額自己負担）
-  const payAmount = userBurden + overAmount;             // 合計領収額（B+C）＝お客様に実際にご負担いただく金額
+  const payAmount = general ? total : (userBurden + overAmount);   // 合計領収額（B+C）＝お客様に実際にご負担いただく金額（一般販売は総額）
   const receiptTax = Math.round(payAmount * 10/110);
   const today = new Date();
   const [iy,im,id] = (items[0].dateStr || `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()}`).split('/').map(v=>parseInt(v,10));
@@ -4632,7 +4842,9 @@ function generateReceipt(){
   // 収入印紙に関する注記文言は金額を問わず不要（2026-09-25、5万円未満分の削除に続き5万円以上分も削除）
   const stampNote = '';
 
-  const descNote = overAmount > 0
+  const descNote = general
+    ? `但し　<b>${desc}</b>　代金として上記正に領収いたしました。`
+    : overAmount > 0
     ? `但し　<b>${desc}</b>　代金として（保険給付対象費用の${ratio}割負担分＋支給限度額超過分）上記正に領収いたしました。`
     : `但し　<b>${desc}</b>　代金として（保険給付対象費用の${ratio}割負担分）上記正に領収いたしました。`;
 
@@ -4654,13 +4866,19 @@ function generateReceipt(){
         <span class="yen">－</span>
       </div>
       <div class="desc">${descNote}</div>
-      <div class="bdtop">福祉用具購入に要した費用の総額（A+C）<b>￥${fmtN(total)}</b></div>
+      ${general ? `<div class="bdtop">商品代金の総額<b>￥${fmtN(total)}</b></div>
+      <div class="bdtop2">一般販売（介護保険は使用していません）</div>
+      <table class="bdtable">
+        <tr><td class="bdlabel">商品代金（税込）</td><td class="bdletter">A</td><td class="bdval">￥${fmtN(total)}</td></tr>
+        <tr><td class="bdlabel">介護保険の給付</td><td class="bdletter">B</td><td class="bdval">なし</td></tr>
+        <tr><td class="bdlabel">お客様のご負担（全額）</td><td class="bdletter">C</td><td class="bdval">￥${fmtN(total)}</td></tr>
+        <tr class="bdsum"><td colspan="2">合計領収額</td><td class="bdval">￥${fmtN(total)}</td></tr>` : `<div class="bdtop">福祉用具購入に要した費用の総額（A+C）<b>￥${fmtN(total)}</b></div>
       <div class="bdtop2">支給限度額の残り（利用上限額）　￥${fmtN(limitRemain)}　｜　負担割合　${ratio}割　｜　超過分　${overAmount>0?'￥'+fmtN(overAmount):'なし'}</div>
       <table class="bdtable">
         <tr><td class="bdlabel">保険給付対象内金額</td><td class="bdletter">A</td><td class="bdval">￥${fmtN(coveredAmount)}</td></tr>
         <tr><td class="bdlabel">介護保険利用者負担額</td><td class="bdletter">B</td><td class="bdval">￥${fmtN(userBurden)}</td></tr>
         <tr><td class="bdlabel">支給限度額超過分（全額自己負担）</td><td class="bdletter">C</td><td class="bdval">￥${fmtN(overAmount)}</td></tr>
-        <tr class="bdsum"><td colspan="2">合計領収額（B+C）</td><td class="bdval">￥${fmtN(payAmount)}</td></tr>
+        <tr class="bdsum"><td colspan="2">合計領収額（B+C）</td><td class="bdval">￥${fmtN(payAmount)}</td></tr>`}
         <tr class="bdtaxrow"><td colspan="2">（内消費税等）</td><td class="bdval">（￥${fmtN(receiptTax)}）</td></tr>
       </table>
       ${stampNote ? `<div class="stampnote">${stampNote}</div>` : ''}
@@ -4767,11 +4985,11 @@ function generateReceipt(){
   }
 </style></head>
 <body>
-<div class="printbar"><button onclick="window.print()">🖨 この資料を印刷する（お客様用・市役所用を1枚に印刷）</button></div>
+<div class="printbar"><button onclick="window.print()">🖨 この資料を印刷する（${general ? 'お客様用・控え' : 'お客様用・市役所用'}を1枚に印刷）</button></div>
 <div class="page">
   ${copyBody('お客様用', 'cust', false)}
   <div class="cutline">✂　この線で切り取ってください　✂</div>
-  ${copyBody('', '', true)}
+  ${copyBody('', '', !general)}
 </div>
 </body></html>`;
   const blob = new Blob([html], {type:'text/html'});
@@ -4792,6 +5010,96 @@ function generateReceipt(){
 function toggleSeihoFields(){
   const on = g('burdenRatio') === 'seiho';
   document.getElementById('seihoFields').style.display = on ? '' : 'none';
+  renderGeneralSaleBox();
+}
+
+// ============================================================
+// 一般販売：品目ごとの値引き（スライダー）と粗利、送料
+// 定価＝商品を選んだときの金額（税込）。購入金額欄（i{n}p）を、値引き後の販売価格（税込）に書き換える。
+// 粗利＝販売価格の税抜額 − 仕入単価（税抜。共通商品マスターの値）。送料はそのまま請求に足す（粗利には含めない）。
+// ============================================================
+let gsSyncing_ = false;
+const yen_ = v => (v == null || isNaN(v)) ? '－' : Math.round(v).toLocaleString() + '円';
+function gsCostOf_(n){
+  const d = selectedItemData[n] || {};
+  if (d.costExTax != null && d.costExTax !== '' && !isNaN(Number(d.costExTax))) return Number(d.costExTax);
+  const m = (d.jan && sharedByJan.get(String(d.jan))) || SHARED_MASTER.find(x => x.name === g(`i${n}n`));
+  return (m && m.cost != null && m.cost !== '') ? Number(m.cost) : null;
+}
+function gsListOf_(n){
+  const d = selectedItemData[n] || (selectedItemData[n] = {});
+  if (d.listPrice == null || d.listPrice === '' || isNaN(Number(d.listPrice))) { const p = gi(`i${n}p`); if (p > 0) d.listPrice = p; }
+  return Number(d.listPrice) || 0;
+}
+function renderGeneralSaleBox(){
+  const box = document.getElementById('gsBox');
+  if (!box) return;
+  if (!isGeneralSale()){ box.style.display = 'none'; return; }
+  box.style.display = '';
+  let h = '';
+  const ns = [];
+  for (let n = 1; n <= visibleItemCount; n++){
+    const name = g(`i${n}n`); if (!name) continue;
+    ns.push(n);
+    const list = gsListOf_(n), max = Math.max(list, gi(`i${n}p`));
+    h += `<div style="border-top:1px dashed #9cc3dd;padding:8px 0;">
+      <div style="font-weight:700;font-size:13px;">品目${n}：${xmlEscape(name)}</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;font-size:12px;">
+        <span>定価 <b>${yen_(list)}</b></span>
+        <input type="range" id="gsRange${n}" min="0" max="100" step="1" style="flex:1;min-width:160px;" oninput="gsSetPct_(${n}, this.value, 'r')" aria-label="値引き率（％）">
+        <b id="gsRate${n}" style="font-size:18px;color:#0369a1;min-width:64px;text-align:right;"></b>
+        <span><input type="number" id="gsPct${n}" min="0" max="100" step="0.5" style="width:72px;display:inline-block;" oninput="gsSetPct_(${n}, this.value, 'p')">％引き</span>
+        <span>＝ <input type="number" id="gsDisc${n}" min="0" max="${max}" step="10" style="width:100px;display:inline-block;" oninput="gsSetDiscount_(${n}, this.value, 'd')">円引き</span>
+      </div>
+      <div id="gsInfo${n}" style="font-size:13px;margin-top:4px;"></div>
+    </div>`;
+  }
+  document.getElementById('gsRows').innerHTML = h || '<div class="note">品目を選ぶと、ここで値引きと粗利を確認できます。</div>';
+  ns.forEach(n => gsUpdateRow_(n, ''));
+  renderGeneralSaleTotals_();
+}
+// 1品目分の表示だけを更新する（スライダーを動かしている最中に作り直すと、つまみが離れてしまうため）
+function gsUpdateRow_(n, src){
+  const show = document.getElementById('gsShowProfit').checked;
+  const list = gsListOf_(n), price = gi(`i${n}p`), disc = Math.max(0, list - price), cost = gsCostOf_(n);
+  const ex = price / 1.1, profit = cost != null ? ex - cost : null, rate = (profit != null && ex > 0) ? profit / ex * 100 : null;
+  const pct = list > 0 ? disc / list * 100 : 0;
+  const r = document.getElementById(`gsRange${n}`), d = document.getElementById(`gsDisc${n}`), pc = document.getElementById(`gsPct${n}`);
+  if (r && src !== 'r') r.value = Math.round(pct);
+  if (pc && src !== 'p') pc.value = Math.round(pct * 10) / 10;
+  if (d && src !== 'd') d.value = disc;
+  const rt = document.getElementById(`gsRate${n}`); if (rt) rt.textContent = `${(Math.round(pct * 10) / 10)}%`;
+  const info = document.getElementById(`gsInfo${n}`);
+  if (info) info.innerHTML = `販売価格（税込） <b style="font-size:15px;">${yen_(price)}</b>` +
+    (show ? `　｜　仕入（税抜） ${cost != null ? yen_(cost) : '未登録'}　｜　粗利（税抜） <b style="color:${profit != null && profit < 0 ? '#c0392b' : '#15803d'};">${profit != null ? yen_(profit) + '（' + rate.toFixed(1) + '%）' : '仕入が未登録のため計算できません'}</b>` : '') +
+    (show && profit != null && profit < 0 ? '<div style="color:#c0392b;font-size:12px;font-weight:700;">⚠ 仕入より安くなっています（赤字）</div>' : '');
+}
+// ％で値引き：値引き額は10円単位に丸める（例：定価33,000円の15％引き → 4,950円引き）
+function gsSetPct_(n, v, src){
+  const list = gsListOf_(n), pct = Math.max(0, Math.min(Number(v) || 0, 100));
+  const disc = Math.min(list, Math.round(list * pct / 100 / 10) * 10);
+  gsSyncing_ = true; document.getElementById(`i${n}p`).value = Math.round(list - disc); gsSyncing_ = false;
+  gsUpdateRow_(n, src); renderGeneralSaleTotals_();
+}
+function gsSetDiscount_(n, v, src){
+  const list = gsListOf_(n), disc = Math.max(0, Math.min(Number(v) || 0, list));
+  gsSyncing_ = true; document.getElementById(`i${n}p`).value = Math.round(list - disc); gsSyncing_ = false;
+  gsUpdateRow_(n, src); renderGeneralSaleTotals_();
+}
+function renderGeneralSaleTotals_(){
+  const el = document.getElementById('gsTotals'); if (!el) return;
+  const show = document.getElementById('gsShowProfit').checked;
+  let list = 0, sale = 0, profit = 0, costKnown = true, any = false;
+  for (let n = 1; n <= visibleItemCount; n++){
+    if (!g(`i${n}n`)) continue; any = true;
+    const p = gi(`i${n}p`), c = gsCostOf_(n);
+    list += gsListOf_(n); sale += p;
+    if (c == null) costKnown = false; else profit += p / 1.1 - c;
+  }
+  if (!any){ el.innerHTML = ''; return; }
+  const ship = gi('gsShipping'), ex = sale / 1.1;
+  el.innerHTML = `合計：定価 ${yen_(list)} → 販売 <b>${yen_(sale)}</b>（値引き ${yen_(list - sale)}）${ship > 0 ? `＋送料 ${yen_(ship)}` : ''}　＝　ご請求 <b style="font-size:15px;">${yen_(sale + ship)}</b>` +
+    (show ? `<br>粗利（税抜・送料を除く）：<b>${costKnown ? yen_(profit) + '（' + (ex > 0 ? (profit / ex * 100).toFixed(1) : '0.0') + '%）' : '仕入が未登録の品目があるため計算できません'}</b>` : '');
 }
 
 // 西暦年→和暦（明治/大正/昭和/平成/令和）の簡易変換（年単位の境界判定。月日までの厳密な改元日は考慮しない）
@@ -5197,6 +5505,8 @@ buildItems();
 [1,2,3].forEach(setTodayOnItemDate);
 loadApiKeyUI();
 loadGasUrlUI();
+loadZaikoUI();
+loadSharedMaster_(false);
 loadDeviceLabelUI();
 ensureCatalogFixesLoaded_(); // 案件管理システムURLが設定済みなら、カタログ補正の共有データを先読みしておく
 attachAllDateSpinners();
