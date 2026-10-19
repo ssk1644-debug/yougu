@@ -154,6 +154,19 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
 .toast{position:fixed;top:76px;right:16px;background:var(--success);color:#fff;padding:13px 22px;border-radius:9px;font-size:13px;font-weight:600;box-shadow:0 4px 24px rgba(0,0,0,.22);transform:translateX(130%);transition:transform .35s cubic-bezier(.34,1.56,.64,1);z-index:999;}
 .toast.show{transform:translateX(0);}
 @media(max-width:640px){.grid{grid-template-columns:1fr;}.f.s2{grid-column:span 1;}.td-monitor-box{grid-template-columns:1fr;grid-column:span 1;}.td-monitor-title{grid-column:span 1;}header{flex-direction:column;align-items:flex-start;}.hb{display:none;}.preset-cards{flex-direction:column;}.pcard{max-width:100%;}}
+/* 一般販売モード：介護保険の申請にだけ使う欄を隠し、必要な欄だけにする */
+body.gs-mode .ins-only{display:none!important;}
+body:not(.gs-mode) .gs-only{display:none!important;}
+.mode-switch{display:flex;margin:0 0 14px;border:1.5px solid #1e3a5f;border-radius:12px;overflow:hidden;background:#fff;}
+.mode-switch button{flex:1;padding:12px 10px;font-size:15px;font-weight:700;border:none;background:#fff;color:#1e3a5f;cursor:pointer;font-family:inherit;}
+.mode-switch button.on{background:#1e3a5f;color:#fff;}
+.mode-switch button + button{border-left:1.5px solid #1e3a5f;}
+body.gs-mode .mode-switch{border-color:#0369a1;}
+body.gs-mode .mode-switch button{color:#0369a1;}
+body.gs-mode .mode-switch button.on{background:#0369a1;color:#fff;}
+body.gs-mode .mode-switch button + button{border-left-color:#0369a1;}
+.mode-note{font-size:12px;color:#0369a1;margin:-8px 0 12px;}
+body.gs-mode .preset-cards{display:none!important;}
 </style>
 </head>
 <body>
@@ -161,13 +174,13 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
   <div class="hl">
     <div class="hi">📋</div>
     <div>
-      <h1>介護保険 福祉用具購入費支給申請書</h1>
-      <p>受領委任払い用 ／ 自動入力フォーム（福山市）</p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-17-5　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <h1><span class="ins-only">介護保険 福祉用具購入費支給申請書</span><span class="gs-only">一般販売（納品・請求書／領収証）</span></h1>
+      <p><span class="ins-only">受領委任払い用 ／ 自動入力フォーム（福山市）</span><span class="gs-only">介護保険を使わない販売 ／ 値引き・送料・粗利</span></p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-19-1　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
-    <div class="hb">📥 市役所提出用 Excel 出力</div>
+    <div class="hb ins-only">📥 市役所提出用 Excel 出力</div>
     <button class="hb" style="cursor:pointer;border:1px solid rgba(255,255,255,.28);" onclick="toggleCaseListPanel()">📋 案件一覧</button>
     <button class="hb" style="cursor:pointer;border:1px solid rgba(255,255,255,.28);" onclick="toggleSettings()">⚙ 設定</button>
   </div>
@@ -175,7 +188,12 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
 <div class="toast" id="toast"></div>
 
 <div class="container">
-  <div class="info">ℹ️&nbsp; 商品カードを選ぶと種目・商品名・金額が自動入力されます。理由はタグをクリックして組み合わせるか、キーワードで追加できます。</div>
+  <div class="mode-switch" role="tablist" aria-label="作る書類の種類">
+    <button type="button" id="modeIns" class="on" onclick="setSaleMode('ins')">🏥 介護保険の申請（特定福祉用具）</button>
+    <button type="button" id="modeGs" onclick="setSaleMode('gs')">🛒 一般販売（介護保険を使わない）</button>
+  </div>
+  <div class="mode-note gs-only">一般販売では、お客様・商品・価格と、納品・請求書／領収証に必要な欄だけを表示しています。案件一覧は介護保険の申請と共通です。</div>
+  <div class="info ins-only">ℹ️&nbsp; 商品カードを選ぶと種目・商品名・金額が自動入力されます。理由はタグをクリックして組み合わせるか、キーワードで追加できます。</div>
 
   <!-- ⚙ 設定 -->
   <div class="sec" id="settingsPanel" style="display:none;">
@@ -242,7 +260,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
   </div>
 
   <!-- 書類から自動入力（統合） -->
-  <div class="sec">
+  <div class="sec ins-only">
     <div class="sh"><div class="si">🪪</div><span class="st">書類から自動入力（任意）</span></div>
     <div class="sb">
       <p class="note" style="margin-bottom:10px;">介護保険被保険者証、介護保険負担割合証、ケアマネジャー作成の利用者基本情報、居宅サービス計画書などの写真・PDFを<b>まとめて複数枚</b>アップロードすると、AIが①氏名・フリガナ・生年月日・住所・被保険者番号、②利用者負担割合（④欄）、③電話番号（申請者電話番号欄）、④性別（⑥生活保護欄）、⑤福祉用具が必要な理由に使えそうな身体状況の要約・キーワード候補を一度に読み取ります。担当者名はこれらの書類には通常含まれないため、担当者欄は引き続き手動でお選びください。読み取り結果は必ず内容をご確認のうえご利用ください。</p>
@@ -258,18 +276,18 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
 
   <!-- ① 被保険者情報 -->
   <div class="sec">
-    <div class="sh"><div class="si">👤</div><span class="st">① 被保険者情報</span></div>
+    <div class="sh"><div class="si">👤</div><span class="st"><span class="ins-only">① 被保険者情報</span><span class="gs-only">① お客様情報</span></span></div>
     <div class="sb">
       <div class="grid">
-        <div class="f"><label>個人番号（12桁・任意）</label><input type="text" id="myNum" placeholder="123456789012" maxlength="12" inputmode="numeric"></div>
-        <div class="f"><label>被保険者番号（10桁）<span class="req">*</span></label><input type="text" id="insNum" placeholder="1234567890" maxlength="10" inputmode="numeric"></div>
-        <div class="f"><label>被保険者氏名（漢字）<span class="req">*</span></label><input type="text" id="name" placeholder="例：山田 太郎"></div>
+        <div class="f ins-only"><label>個人番号（12桁・任意）</label><input type="text" id="myNum" placeholder="123456789012" maxlength="12" inputmode="numeric"></div>
+        <div class="f ins-only"><label>被保険者番号（10桁）<span class="req">*</span></label><input type="text" id="insNum" placeholder="1234567890" maxlength="10" inputmode="numeric"></div>
+        <div class="f"><label><span class="ins-only">被保険者氏名（漢字）</span><span class="gs-only">お客様氏名</span><span class="req">*</span></label><input type="text" id="name" placeholder="例：山田 太郎"></div>
         <div class="f">
           <label>フリガナ<span class="req">*</span></label>
           <input type="text" id="kana" placeholder="例：ヤマダ タロウ">
           <div class="note">※読み方に誤りがないか必ずご確認ください</div>
         </div>
-        <div class="f">
+        <div class="f ins-only">
           <label>生年月日<span class="req">*</span></label>
           <div class="dr">
             <input type="number" id="bY" class="yr" placeholder="1945" min="1900" max="2010"><span>年</span>
@@ -277,23 +295,23 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
             <input type="number" id="bD" class="dy" placeholder="1" min="1" max="31"><span>日</span>
           </div>
         </div>
-        <div class="f s2"><label>被保険者住所<span class="req">*</span></label><input type="text" id="addr" placeholder="例：広島県福山市〇〇町1-2-3"></div>
+        <div class="f s2"><label><span class="ins-only">被保険者住所<span class="req">*</span></span><span class="gs-only">ご住所（請求書に記載）</span></label><input type="text" id="addr" placeholder="例：広島県福山市〇〇町1-2-3"></div>
       </div>
     </div>
   </div>
 
   <!-- ② 福祉用具 -->
   <div class="sec">
-    <div class="sh"><div class="si">🛒</div><span class="st">② 購入した福祉用具（最大3品目）</span></div>
+    <div class="sh"><div class="si">🛒</div><span class="st"><span class="ins-only">② 購入した福祉用具（最大3品目）</span><span class="gs-only">② 販売する商品（最大3品目）</span></span></div>
     <div class="sb"><div id="items"></div></div>
   </div>
 
   <!-- ③ 申請者情報 -->
   <div class="sec">
-    <div class="sh"><div class="si">📝</div><span class="st">③ 申請者（委任者）情報</span></div>
+    <div class="sh"><div class="si">📝</div><span class="st"><span class="ins-only">③ 申請者（委任者）情報</span><span class="gs-only">③ 連絡先・担当者</span></span></div>
     <div class="sb">
       <div class="grid">
-        <div class="f">
+        <div class="f ins-only">
           <label>申請日<span class="req">*</span></label>
           <div class="dr">
             <input type="number" id="aY" class="yr" min="2020" max="2099"><span>年</span>
@@ -301,16 +319,16 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
             <input type="number" id="aD" class="dy" min="1" max="31"><span>日</span>
           </div>
         </div>
-        <div class="f"><label>申請者住所（被保険者と異なる場合）</label><input type="text" id="aAddr" placeholder="同じ場合は空欄"></div>
-        <div class="f"><label>申請者氏名（被保険者と異なる場合）</label><input type="text" id="aName" placeholder="同じ場合は空欄"></div>
-        <div class="f"><label>申請者電話番号（利用者ご本人の連絡先）<span class="req">*</span></label><input type="tel" id="aPhone" placeholder="例：084-123-4567"></div>
+        <div class="f ins-only"><label>申請者住所（被保険者と異なる場合）</label><input type="text" id="aAddr" placeholder="同じ場合は空欄"></div>
+        <div class="f ins-only"><label>申請者氏名（被保険者と異なる場合）</label><input type="text" id="aName" placeholder="同じ場合は空欄"></div>
+        <div class="f"><label><span class="ins-only">申請者電話番号（利用者ご本人の連絡先）<span class="req">*</span></span><span class="gs-only">お客様の電話番号</span></label><input type="tel" id="aPhone" placeholder="例：084-123-4567"></div>
       </div>
-      <div class="div"></div>
-      <div class="sublbl">受任者（販売事業者）情報</div>
+      <div class="div ins-only"></div>
+      <div class="sublbl ins-only">受任者（販売事業者）情報</div>
       <div class="grid">
-        <div class="f s2"><label>受任者住所</label><input type="text" id="dAddr" value="広島県福山市引野町南1-18-25" placeholder="販売事業者の所在地"></div>
-        <div class="f"><label>事業所名称</label><input type="text" id="dBiz" value="株式会社アスポート" placeholder="例：〇〇介護用品センター"></div>
-        <div class="f"><label>代表者名</label><input type="text" id="dRep" value="代表取締役 佐々木浩" placeholder="例：代表取締役 〇〇 〇〇"></div>
+        <div class="f s2 ins-only"><label>受任者住所</label><input type="text" id="dAddr" value="広島県福山市引野町南1-18-25" placeholder="販売事業者の所在地"></div>
+        <div class="f ins-only"><label>事業所名称</label><input type="text" id="dBiz" value="株式会社アスポート" placeholder="例：〇〇介護用品センター"></div>
+        <div class="f ins-only"><label>代表者名</label><input type="text" id="dRep" value="代表取締役 佐々木浩" placeholder="例：代表取締役 〇〇 〇〇"></div>
         <div class="f">
           <label>担当者名</label>
           <select id="dStaff" onchange="onDStaffSelectChange()">
@@ -327,17 +345,17 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
           </select>
           <input type="text" id="dStaffOther" placeholder="担当者名を入力" style="display:none;margin-top:6px;">
         </div>
-        <div class="f"><label>受任者電話番号</label><input type="tel" id="dPhone" value="084-971-8882" placeholder="例：084-987-6543"></div>
+        <div class="f ins-only"><label>受任者電話番号</label><input type="tel" id="dPhone" value="084-971-8882" placeholder="例：084-987-6543"></div>
       </div>
     </div>
   </div>
 
   <!-- ④ 請求書・領収証・適合シート 追加情報 -->
   <div class="sec">
-    <div class="sh"><div class="si">🧾</div><span class="st">④ 請求書・領収証・適合確認シート用の追加情報</span></div>
+    <div class="sh"><div class="si">🧾</div><span class="st"><span class="ins-only">④ 請求書・領収証・適合確認シート用の追加情報</span><span class="gs-only">④ 請求書・領収証の情報</span></span></div>
     <div class="sb">
       <div class="grid">
-        <div class="f">
+        <div class="f ins-only">
           <label>利用者負担割合</label>
           <select id="burdenRatio" onchange="toggleSeihoFields()">
             <option value="" selected>未確認（必ず選択してください）</option>
@@ -349,7 +367,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
           </select>
           <div class="note">※生活保護（介護扶助）受給者の場合は「生活保護」を選択してください。⑥欄に追加書類の出力欄が表示されます。<br>※特定福祉用具以外の商品を販売するとき（介護保険を使わないとき）は「一般販売」を選択してください。納品・請求書と領収証だけを出します（申請書は作りません）。</div>
         </div>
-        <div class="f">
+        <div class="f ins-only">
           <label>支給限度額の残り（円）<span class="note">※福祉用具購入費の年間上限は10万円。今年度すでに他の品目で使った分があれば差し引いた残額を入力</span></label>
           <input type="number" id="receiptLimitRemain" value="100000" min="0" step="1">
           <button type="button" class="btn bg" style="padding:6px 10px;min-width:auto;margin-top:6px;font-size:12px;" onclick="suggestReceiptLimitRemain()">🔍 案件一覧の他の購入実績から自動計算</button>
@@ -357,7 +375,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
         <div class="f"><label>領収証No.（任意）</label><input type="text" id="receiptNo" placeholder="例：019136"></div>
         <div class="f s2"><label>振込先（請求書に記載）</label><input type="text" id="bankInfo" value="三菱UFJ銀行福山支店（当座）9009818　・　広島銀行福山胡町（普通）1055445"></div>
         <div class="f"><label>インボイス登録番号</label><input type="text" id="invoiceRegNo" value="T2-2400001042263" placeholder="例：T2-1234567890123"></div>
-        <div class="f">
+        <div class="f ins-only">
           <label>適合確認シート作成日</label>
           <div class="dr">
             <input type="number" id="cfY" class="yr" min="2020" max="2099"><span>年</span>
@@ -365,7 +383,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
             <input type="number" id="cfD" class="dy" min="1" max="31"><span>日</span>
           </div>
         </div>
-        <div class="f">
+        <div class="f ins-only">
           <label>使用前点検日（任意）</label>
           <div class="dr">
             <input type="number" id="ckY" class="yr" min="2020" max="2099"><span>年</span>
@@ -373,7 +391,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
             <input type="number" id="ckD" class="dy" min="1" max="31"><span>日</span>
           </div>
         </div>
-        <div class="f">
+        <div class="f ins-only">
           <label>説明担当者（適合確認シート）<span class="note">※未選択なら③欄の担当者と同じ</span></label>
           <select id="cfExplainStaff" onchange="onStaffSelectChange('cfExplainStaff','cfExplainStaffOther')">
             <option value="">（担当者と同じ）</option>
@@ -389,7 +407,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
           </select>
           <input type="text" id="cfExplainStaffOther" placeholder="担当者名を入力" style="display:none;margin-top:6px;">
         </div>
-        <div class="td-monitor-box">
+        <div class="td-monitor-box ins-only">
         <div class="td-monitor-title">📅 10日後モニタリング入力欄（後日ここだけ入力する場合の目印）</div>
         <div class="f">
           <label>10日後確認者（適合確認シート）<span class="note">※未選択なら③欄の担当者と同じ</span></label>
@@ -440,7 +458,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
           <div id="tdCommentSuggestions" style="display:none;flex-direction:column;gap:6px;margin-top:8px;"></div>
         </div>
         </div>
-        <div class="f s2">
+        <div class="f s2 ins-only">
           <label>導入時サイン（利用者・代理人様）</label>
           <div class="note" id="reviewSignatureStatus">※サインは「適合確認シート確認ページ」でお客様に直接ご入力いただきます（未サイン）</div>
           <button type="button" class="btn bp" style="padding:8px 12px;min-width:auto;margin-top:6px;" onclick="openConfirmReviewPage()">✅ 適合確認シート確認ページを開く（レビュー・サイン・出力）</button>
@@ -451,7 +469,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
   </div>
 
   <!-- ⑤ 購入履歴 -->
-  <div class="sec">
+  <div class="sec ins-only">
     <div class="sh"><div class="si">📅</div><span class="st">⑤ 過去の福祉用具購入履歴（任意）</span></div>
     <div class="sb">
       <p class="note" style="margin-bottom:12px;">同年度内に過去購入履歴がある場合のみ入力してください。</p>
@@ -463,7 +481,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
   </div>
 
   <!-- ⑥ 生活保護受給者用の追加書類 -->
-  <div class="sec">
+  <div class="sec ins-only">
     <div class="sh"><div class="si">🏛</div><span class="st">⑥ 生活保護受給者の場合の追加書類（該当する場合のみ）</span></div>
     <div class="sb">
       <div class="note" style="margin-bottom:4px;">※④欄の「利用者負担割合」で「生活保護」を選択すると、下の欄が表示されます。</div>
@@ -491,14 +509,14 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
 <div class="actions">
   <button class="btn bg" onclick="clearForm()">🗑 クリア</button>
   <button class="btn bg" id="saveCaseBtn" onclick="saveCurrentCase()">💾 この案件を保存/更新</button>
-  <button class="btn bg" id="pamphletBtn" onclick="generatePamphlet()">🖼 商品パンフレット資料を出力</button>
-  <button class="btn bp" id="reviewPageBtn" onclick="openConfirmReviewPage()">✅ 適合確認シート確認ページ（レビュー・サイン・出力）</button>
-  <button class="btn bg" id="invoiceBtn" onclick="generateInvoice()">🧾 納品・請求書を出力</button>
-  <button class="btn bg" id="conformityBtn" onclick="generateConformitySheet()">📋 適合確認シートを出力</button>
-  <button class="btn bg" id="savePdfBtn" onclick="saveConformityPdfToCase()">📄 適合確認シートをPDF保存（案件に添付）</button>
+  <button class="btn bg ins-only" id="pamphletBtn" onclick="generatePamphlet()">🖼 商品パンフレット資料を出力</button>
+  <button class="btn bp ins-only" id="reviewPageBtn" onclick="openConfirmReviewPage()">✅ 適合確認シート確認ページ（レビュー・サイン・出力）</button>
+  <button class="btn bg" id="invoiceBtn" onclick="generateInvoice()" data-gs-class="bp">🧾 納品・請求書を出力</button>
+  <button class="btn bg ins-only" id="conformityBtn" onclick="generateConformitySheet()">📋 適合確認シートを出力</button>
+  <button class="btn bg ins-only" id="savePdfBtn" onclick="saveConformityPdfToCase()">📄 適合確認シートをPDF保存（案件に添付）</button>
   <a id="currentPdfLink" href="#" target="_blank" rel="noopener" class="btn bg" style="display:none;text-decoration:none;">📄 保存済みPDFを開く</a>
   <button class="btn bg" id="receiptBtn" onclick="generateReceipt()">🧾 領収証を出力</button>
-  <button class="btn bp" id="outBtn" onclick="generateExcel()">📥 Excelファイルを出力する</button>
+  <button class="btn bp ins-only" id="outBtn" onclick="generateExcel()">📥 Excelファイルを出力する</button>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -886,7 +904,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-10-17-5";
+const APP_VERSION = "2026-10-19-1";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -1239,7 +1257,8 @@ function renderCaseList(){
     const prev = prevStatusOf(c.status, c);
     const btns = [
       ...nextOpts.map(opt => `<button type="button" class="btn bg" onclick="updateCaseStatus('${c.caseId}','${opt.to}')">${opt.label}</button>`),
-      prev ? `<button type="button" class="btn bg" onclick="updateCaseStatus('${c.caseId}','${prev}')" title="一つ前の状態に戻す">◀ 戻す</button>` : ""
+      prev ? `<button type="button" class="btn bg" onclick="updateCaseStatus('${c.caseId}','${prev}')" title="一つ前の状態に戻す">◀ 戻す</button>` : "",
+      stockPending_()[c.caseId] ? `<button type="button" class="btn bg" style="border-color:#d97706;color:#b45309" onclick="stockSync_('${c.caseId}','${stockPending_()[c.caseId]}')" title="在庫システムへの反映をやり直す">📦 在庫に反映</button>` : ""
     ].join("");
     const doneNote = c.status === "完了" ? `<div class="status-done-note">✅ 完了</div>` : "";
     // 適合確認PDF列は一覧から削除し（2026-10-02、「読み込んでから表示でもいいかも」との要望）、
@@ -1267,16 +1286,73 @@ async function updateCaseStatus(caseId, newStatus){
   const rec = caseListCache.find(c => c.caseId === caseId);
   if (!rec) return;
   try{
+    const oldStatus = rec.status;
     await gasPost("save", { case: { caseId, status: newStatus } }); // formDataキーを含めないことで既存の入力内容を保持したまま進捗のみ更新
     rec.status = newStatus;
     rec.updatedAt = new Date().toISOString();
     if (caseId === currentCaseId) currentCaseStatus = newStatus;
     renderCaseList();
     toast("✅ 進捗状況を更新しました");
+    // 納品を確定した（「納品」以降に進んだ）ら在庫システムの新品在庫を減らす。「納品」より前に戻したら在庫に戻す
+    const ND = STATUS_INDEX.get("納品"), oi = STATUS_INDEX.has(oldStatus) ? STATUS_INDEX.get(oldStatus) : 0, ni = STATUS_INDEX.has(newStatus) ? STATUS_INDEX.get(newStatus) : 0;
+    if (oi < ND && ni >= ND) await stockSync_(caseId, "out");
+    else if (oi >= ND && ni < ND) await stockSync_(caseId, "undo");
   } catch(err){
     toast("❌ 更新に失敗しました：" + err.message, false);
     renderCaseList(); // 表示を元の状態に戻す
   }
+}
+
+// ============================================================
+// 在庫システムとの連携：納品確定で新品在庫を減らす（1品目＝1台）。
+// 在庫システムのGAS（v9以降）に saleOut／saleUndo を送る。同じ案件は2回減らない（在庫システム側で案件IDごとに控えを持つ）。
+// 送れなかった案件は端末に控えておき、案件一覧の「📦 在庫に反映」ボタンでやり直せる。
+// ============================================================
+const STOCK_PENDING = "asport_stock_pending";
+function stockPending_(){ try { return JSON.parse(localStorage.getItem(STOCK_PENDING) || "{}") || {}; } catch(e){ return {}; } }
+function setStockPending_(caseId, kind){ const p = stockPending_(); if (kind) p[caseId] = kind; else delete p[caseId]; try { localStorage.setItem(STOCK_PENDING, JSON.stringify(p)); } catch(e){} }
+async function zaikoPost_(payload){
+  const url = getZaikoUrl();
+  if (!url) throw new Error("在庫システムのURLが未設定です（⚙設定で登録してください）");
+  const res = await fetch(url, { method:"POST", headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify(Object.assign({ token: localStorage.getItem(ZAIKO_TOKEN_STORAGE) || "" }, payload)) });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error === "unknown action" ? "在庫システムのCode.gsが古いです（v9以降に貼り替えてください）" : (data.error || "通信エラー"));
+  return data;
+}
+function caseStockLines_(fd){
+  const v = (fd && fd.values) || {}, sel = (fd && fd.selectedItemData) || {}, out = [];
+  for (let n = 1; n <= (fd && fd.visibleItemCount || 1); n++){
+    const name = String(v[`i${n}n`] || "").trim(), d = sel[n] || sel[String(n)] || {};
+    if (!name && !d.jan) continue;
+    out.push({ name, jan: d.jan || "", masterKey: d.masterKey || "" });
+  }
+  return out;
+}
+async function stockSync_(caseId, kind){
+  if (!getZaikoUrl()) return;   // 在庫システムと連携していない端末では何もしない
+  const rec = caseListCache.find(c => c.caseId === caseId) || {};
+  try {
+    if (kind === "undo"){
+      const r = await zaikoPost_({ action:"saleUndo", caseId, user: rec.staff || "" });
+      setStockPending_(caseId, null);
+      if (r.back) toast(`📦 在庫に ${r.back}台 戻しました`);
+    } else {
+      const data = await gasFetch("get", { id: caseId });
+      const items = caseStockLines_(data.case && data.case.formData);
+      if (!items.length){ setStockPending_(caseId, null); return; }
+      const r = await zaikoPost_({ action:"saleOut", caseId, label: (rec.customerName ? rec.customerName + "様" : caseId), items, user: rec.staff || "" });
+      setStockPending_(caseId, null);
+      const ok = (r.result || []).filter(x => x.ok), ng = (r.result || []).filter(x => !x.ok);
+      if (r.already) toast("📦 この案件は在庫に反映済みです");
+      else if (!ng.length) toast(`📦 新品在庫を ${ok.length}台 減らしました`);
+      if (ng.length && !r.already) alert(`📦 新品在庫を ${ok.length}台 減らしました。\n\n次の商品は減らせませんでした（必要なら在庫システムで手で出庫してください）：\n` + ng.map(x => `・${x.name}（${x.reason}）`).join("\n"));
+    }
+  } catch(err){
+    setStockPending_(caseId, kind);
+    alert(`⚠ 進捗は更新しましたが、在庫システムに${kind === "undo" ? "戻す" : "反映する"}ことができませんでした。\n${err.message}\n\n案件一覧の「📦 在庫に反映」ボタンで、あとからやり直せます。`);
+  }
+  renderCaseList();
 }
 
 // 案件一覧から案件を削除する。誤操作防止のため、必ず確認ダイアログを経てから
@@ -1885,11 +1961,11 @@ function buildItems() {
 
         <!-- 入力フォーム -->
         <div class="grid">
-          <div class="f"><label>種目名${opt?'':' <span class="req">*</span>'}</label><input type="text" id="i${n}t" placeholder="例：入浴補助用具"></div>
+          <div class="f ins-only"><label>種目名${opt?'':' <span class="req">*</span>'}</label><input type="text" id="i${n}t" placeholder="例：入浴補助用具"></div>
           <div class="f"><label>商品名${opt?'':' <span class="req">*</span>'}</label><input type="text" id="i${n}n" placeholder="例：シャワーチェア〇〇型"></div>
           <div class="f"><label>製造事業者名</label><input type="text" id="i${n}mk" placeholder="例：〇〇株式会社"></div>
-          <div class="f"><label>販売事業者名${opt?'':' <span class="req">*</span>'}</label><input type="text" id="i${n}sl" value="株式会社アスポート" placeholder="例：△△介護用品店"></div>
-          <div class="f"><label>事業所番号</label><input type="text" id="i${n}bn" value="3471500771" maxlength="10"></div>
+          <div class="f ins-only"><label>販売事業者名${opt?'':' <span class="req">*</span>'}</label><input type="text" id="i${n}sl" value="株式会社アスポート" placeholder="例：△△介護用品店"></div>
+          <div class="f ins-only"><label>事業所番号</label><input type="text" id="i${n}bn" value="3471500771" maxlength="10"></div>
           <div class="f"><label>購入金額（税込・円）${opt?'':' <span class="req">*</span>'}</label><input type="number" id="i${n}p" min="0" placeholder="例：15000"></div>
           <div class="f">
             <label>購入日${opt?'':' <span class="req">*</span>'}</label>
@@ -1902,7 +1978,7 @@ function buildItems() {
         </div>
 
         <!-- 理由タグセクション -->
-        <div style="margin-top:16px;">
+        <div class="ins-only" style="margin-top:16px;">
           <label style="display:block;margin-bottom:8px;">福祉用具が必要な理由${opt?'':' <span class="req">*</span>'}</label>
           <div class="note" style="margin-bottom:8px;">保険者は「その方の心身の状況・住まいにその用具が合っているか」をこの欄で確認します。<b>疾患・既往／身体機能の状況</b>を必ず入れ、<b>どの動作がどう困難か</b>まで具体的に書いてください（「必要である」だけの記載は不可）。商品カード選択時の初期タグは下書きです。必ずご本人の状態に合わせて直してください。</div>
           <div class="tag-area" id="tagarea${n}"></div>
@@ -2731,6 +2807,7 @@ function toast(msg, ok=true){
 
 function clearForm(){
   if (!confirm('入力内容をすべてクリアしますか？')) return;
+  const wasGeneralSale = isGeneralSale();
   document.querySelectorAll('input,textarea').forEach(el => {
     if (el.id === 'apiKeyInput' || el.id === 'apiModelInput' || el.id === 'gasUrlInput' || el.id === 'deviceLabelInput' || el.id === 'zaikoUrlInput' || el.id === 'zaikoTokenInput') return; // APIキー・案件管理システムURL・端末ラベルの設定は保持
     el.value='';
@@ -2792,6 +2869,7 @@ function clearForm(){
   { const box = document.getElementById('tdCommentSuggestions'); if (box){ box.style.display = 'none'; box.innerHTML = ''; box._candidates = null; } }
   tdDateAutoFilled = false;
   clearSignaturePad();
+  if (wasGeneralSale){ document.getElementById('burdenRatio').value = 'self'; toggleSeihoFields(); }
   markFormSynced(); // クリア直後の状態を「同期済み」の基準にする（未保存編集の検知用）
 }
 
@@ -5010,7 +5088,25 @@ function generateReceipt(){
 function toggleSeihoFields(){
   const on = g('burdenRatio') === 'seiho';
   document.getElementById('seihoFields').style.display = on ? '' : 'none';
+  applySaleModeUI_();
   renderGeneralSaleBox();
+}
+// 画面上部の切替：「介護保険の申請」⇔「一般販売」。中身は④欄の負担割合（一般販売＝self）と同じもので、
+// 一般販売では申請にしか使わない欄・ボタンを隠すだけ（入力済みの値は消さない。切り替えて戻せば元のまま）
+function setSaleMode(mode){
+  const sel = document.getElementById('burdenRatio');
+  if (mode === 'gs'){ if (sel.value !== 'self') sel.dataset.prevRatio = sel.value; sel.value = 'self'; }
+  else if (sel.value === 'self'){ sel.value = sel.dataset.prevRatio || ''; }
+  toggleSeihoFields();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function applySaleModeUI_(){
+  const gs = isGeneralSale();
+  document.body.classList.toggle('gs-mode', gs);
+  const a = document.getElementById('modeIns'), b = document.getElementById('modeGs');
+  if (a && b){ a.classList.toggle('on', !gs); b.classList.toggle('on', gs); a.setAttribute('aria-selected', String(!gs)); b.setAttribute('aria-selected', String(gs)); }
+  const inv = document.getElementById('invoiceBtn');
+  if (inv){ inv.classList.toggle('bp', gs); inv.classList.toggle('bg', !gs); }
 }
 
 // ============================================================
