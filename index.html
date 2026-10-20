@@ -189,7 +189,7 @@ body.gs-mode .preset-cards{display:none!important;}
     <div>
       <h1><span class="ins-only">介護保険 福祉用具購入費支給申請書</span><span class="gs-only">一般販売（納品・請求書／領収証）</span></h1>
       <p><span class="ins-only">受領委任払い用 ／ 自動入力フォーム（福山市）</span><span class="gs-only">介護保険を使わない販売 ／ 値引き・送料・粗利</span></p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-20-5　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-20-7　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -948,7 +948,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-10-20-5";
+const APP_VERSION = "2026-10-20-7";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -3114,6 +3114,7 @@ function addStyledXf_(st, baseIdx, sp){
   if (sp.h) al.horizontal = sp.h;
   al.vertical = sp.v || al.vertical || 'center';
   if (sp.wrap){ al.wrapText = '1'; delete al.shrinkToFit; }
+  else if (sp.wrap === false) delete al.wrapText;   // 様式側の「折り返し」で2行目が隠れて見えなくなるのを防ぐ
   const alXml = '<alignment ' + Object.entries(al).map(([k, v]) => `${k}="${v}"`).join(' ') + '/>';
   if (am) neo = neo.replace(am[0], alXml);
   else if (/\/>\s*$/.test(neo)) neo = neo.replace(/\/>\s*$/, `>${alXml}</xf>`);
@@ -3143,6 +3144,23 @@ function fitFontPt_(text, w, h, maxS, minS){
     if (Math.ceil(units / perLine) <= lines) return sz;
   }
   return minS;
+}
+// 請求書の品名欄（D〜K列・1行の高さ）に収める：1行で大きく入ればそのまま、長ければ2行（品名行＋メーカー行）に分けて入れる
+function invoiceNameLayout_(name){
+  const W = 190, u = c => (c.charCodeAt(0) < 0x80 || /[ｦ-ﾟ]/.test(c)) ? 0.55 : 1;
+  const chars = [...String(name || '').trim()], n = chars.length, total = chars.reduce((a, c) => a + u(c), 0);
+  for (const sz of [11, 10.5]) if (total <= W * 0.92 / sz) return { l1: chars.join(''), l2: '', sz };
+  // 区切りの良さ：2=記号・空白の後／括弧の前、1=文字の種類が変わる所（カタカナ→漢字など）、0=単語の途中
+  const kind = c => /[ァ-ヶー]/.test(c) ? 'k' : /[ぁ-ん]/.test(c) ? 'h' : /[一-龯々]/.test(c) ? 'j' : /[A-Za-z]/.test(c) ? 'a' : /[0-9.\-]/.test(c) ? 'd' : 'o';
+  const score = k => /[\]）)】\s　・／\/]/.test(chars[k-1]) || /[（(［\[【]/.test(chars[k]) ? 2 : kind(chars[k-1]) !== kind(chars[k]) ? 1 : 0;
+  const pre = [0]; chars.forEach(c => pre.push(pre[pre.length-1] + u(c)));
+  const pick = (sz, minScore) => { const per = W * 0.92 / sz; let best = null;
+    for (let k = 1; k < n; k++){ const a = pre[k], b = total - pre[k]; if (a > per || b > per) continue; const sc = score(k); if (sc < minScore) continue;
+      const v = sc * 100 - Math.abs(a - b); if (!best || v > best.v) best = { k, v }; }
+    return best ? { l1: chars.slice(0, best.k).join('').trim(), l2: chars.slice(best.k).join('').trim(), sz } : null; };
+  for (let sz = 11; sz >= 8; sz -= 0.5){ const r = pick(sz, 1); if (r) return r; }
+  for (let sz = 11; sz >= 7; sz -= 0.5){ const r = pick(sz, 0); if (r) return r; }
+  return { l1: chars.join(''), l2: '', sz: 8 };
 }
 // 申請書の商品名：「シャワーチェア」の文言は付けない（種目名と写真で分かるため。2026-10-20指示）
 function appFormItemName_(name){
@@ -3523,6 +3541,7 @@ async function doGenerate(){
   [13,19,25].forEach((base,idx) => {
     if (idx+1 > visibleItemCount) return;
     const it = items[idx];
+    if (!it.name && !it.price && !it.type) return;   // 品目欄を開いただけで空のときは、日付なども入れない
     const bizRow = base+3;
     if (it.type) set(`C${base+1}`, it.type);         // 種目名
     if (it.maker) set(`K${base+1}`, it.maker);        // 製造事業者名
@@ -3614,6 +3633,7 @@ async function doGenerateShokan_(nm, kna, addr, appAddr, appName, items, hist){
   [14,20,26].forEach((base,idx) => {
     if (idx+1 > visibleItemCount) return;
     const it = items[idx];
+    if (!it.name && !it.price && !it.type) return;   // 品目欄を開いただけで空のときは、日付なども入れない
     if (it.type) set(`C${base+1}`, it.type);
     if (it.maker) set(`K${base+1}`, it.maker);
     if (it.name) set(`C${base+3}`, appFormItemName_(it.name));
@@ -3639,7 +3659,7 @@ async function doGenerateShokan_(nm, kna, addr, appAddr, appName, items, hist){
   set('G43', g('bkKana'));
   // 提出者記入欄：事業者（アスポート）が提出する
   set('A65', ' ■');
-  const st = getDStaffValue(), pad = l => l + '　'.repeat(Math.max(1, 9 - l.length));   // 名前・事業所・連絡先の書き出しをそろえる
+  const st = getDStaffValue(), pad = l => l + '　'.repeat(Math.max(1, 8 - l.length));   // 名前・事業所・連絡先の書き出しをそろえる
   if (st) set('I64', `${pad('（名前）')}${st}`);
   set('I65', `${pad('（事業所等名称）')}${g('dBiz') || '株式会社アスポート'}`);
   if (g('dPhone')) set('I66', `${pad('（連絡先）')}${g('dPhone')}`);
@@ -3661,7 +3681,7 @@ async function doGenerateShokan_(nm, kna, addr, appAddr, appName, items, hist){
       if (it.reason) sp.push({ref:`C${base+5}`, sz: fitFontPt_(it.reason, 633, 27, 10, 6), h:'left', v:'top', wrap:true});
     });
     sp.push({ref:'H36', sz:18, h:'center'}, {ref:'H38', sz:18, h:'center'}, {ref:'R38', sz:14});
-    ['I64','I65','I66'].forEach(r => sp.push({ref:r, sz:14, h:'left'}));
+    ['I64','I65','I66'].forEach(r => sp.push({ref:r, sz:14, h:'left', wrap:false}));
     xml = await styleCellsInSheet_(zip, xml, sp); }
   zip.file(sheetPath, xml);
   const blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -4536,6 +4556,9 @@ async function generateInvoice(){
       }
     }
 
+    const invStyle = [];
+    const lays = items.slice(0,5).map(it => invoiceNameLayout_(appFormItemName_(it.name)));   // 「シャワーチェア」は付けない。長い品名は2行に
+    const makerToNote = lays.some(l => l.l2);   // 2行の品名が1つでもあれば、メーカー名はそろえて全部備考欄へ
     items.slice(0,5).forEach((it,idx) => {
       const r1 = rows1[idx];
       const r2 = rows2[idx];
@@ -4547,9 +4570,15 @@ async function generateInvoice(){
       } else {
         dateVal = '〃';
       }
+      const lay = lays[idx];
       [r1, r2].forEach(r => {
-        set(`D${r}`, it.name);
-        set(`D${r+1}`, it.maker);
+        set(`D${r}`, lay.l1);
+        if (lay.l2) set(`D${r+1}`, lay.l2);
+        if (makerToNote){ if (it.maker) set(`Z${r}`, it.maker); }
+        else set(`D${r+1}`, it.maker);
+        invStyle.push({ref:`D${r}`, sz: lay.sz, h:'left'});
+        if (lay.l2) invStyle.push({ref:`D${r+1}`, sz: lay.sz, h:'left'});
+        if (makerToNote && it.maker) invStyle.push({ref:`Z${r}`, sz: 9, h:'center', wrap:true});
         setNum(`L${r}`, 1);
         set(`M${r}`, it.unit || ((ratioRaw === 'seiho' && isShokan()) ? '式' : '台'));
         setNum(`N${r}`, it.price);
@@ -4569,6 +4598,8 @@ async function generateInvoice(){
     xml = await forceRobustInvoiceBorders_(zip, xml);
     // 2枚目(副本)の罫線を、整え終わった1枚目(正本)と完全に同一になるよう複製する
     xml = mirrorInvoiceCopy2Borders_(xml);
+    // 品名の文字の大きさ（罫線を整えた後に、その書式を元にして大きさだけ変える）
+    xml = await styleCellsInSheet_(zip, xml, invStyle);
 
     zip.file(sheetPath, xml);
     const blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -5187,7 +5218,7 @@ function generateReceipt(){
   const dPhone = g('dPhone'), dAddr = g('dAddr');
   const receiptNo = g('receiptNo');
 
-  const desc = items.map(it => xmlEscape(it.name || '福祉用具')).join('・');
+  const desc = items.map(it => xmlEscape(appFormItemName_(it.name) || '福祉用具')).join('・');
 
   // 金額を千万～一の位の枠に割り当てる（先頭のゼロは空欄にする）
   const labels = ['千万','百万','十万','万','千','百','十','一'];
@@ -5230,11 +5261,9 @@ function generateReceipt(){
       </div>
       <div class="desc">${descNote}</div>
       ${shokan ? `<div class="bdtop">福祉用具購入に要した費用の総額<b>￥${fmtN(total)}</b></div>
-      <div class="bdtop2">償還払い（全額をお支払いいただき、後日、市からご本人の口座へ払い戻し）</div>
+      <div class="bdtop2">償還払い（全額お支払い済み。後日、市からご本人の口座へ払い戻し）　｜　今年度の支給限度額の残り　￥${fmtN(limitRemain)}${overAmount > 0 ? `　<b style="color:#b91c1c">（超過分 ￥${fmtN(overAmount)} は払い戻しの対象外）</b>` : ''}</div>
       <table class="bdtable">
-        <tr><td class="bdlabel">福祉用具購入費（税込）</td><td class="bdletter">A</td><td class="bdval">￥${fmtN(total)}</td></tr>
-        <tr><td class="bdlabel">うち支給限度額の範囲（払い戻しの対象）</td><td class="bdletter">B</td><td class="bdval">￥${fmtN(coveredAmount)}</td></tr>
-        <tr><td class="bdlabel">今回のお支払い（全額）</td><td class="bdletter">C</td><td class="bdval">￥${fmtN(total)}</td></tr>
+        ${[0,1,2].map(i => { const it = items.filter(x => x.n !== 'ship')[i]; return `<tr style="height:18px"><td class="bdlabel" colspan="2" style="max-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it ? xmlEscape(appFormItemName_(it.name) || '福祉用具') : '&nbsp;'}</td><td class="bdval">${it ? '￥' + fmtN(it.price) : '&nbsp;'}</td></tr>`; }).join('')}
         <tr class="bdsum"><td colspan="2">合計領収額</td><td class="bdval">￥${fmtN(total)}</td></tr>` : general ? `<div class="bdtop">商品代金の総額<b>￥${fmtN(total)}</b></div>
       <div class="bdtop2">一般販売（介護保険は使用していません）</div>
       <table class="bdtable">
