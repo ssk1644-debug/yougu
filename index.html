@@ -111,6 +111,15 @@ body:not(.pay-shokan) .pm-shokan{display:none!important}
 .pay-tag{display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;background:#f59e0b;color:#fff;font-weight:700;font-size:13px;white-space:nowrap}
 #payMethod.is-shokan{border:2px solid #f59e0b;background:#fff7e6;font-weight:700}
 body.pay-shokan .pm-juryo{display:none!important}
+.case-kind{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.case-kind button{border:0;background:#fff;padding:8px 12px;font-size:13px;cursor:pointer}
+.case-kind button.on{background:#1e3a8a;color:#fff;font-weight:700}
+body.casekind-gs .case-tbl th:nth-child(6), body.casekind-gs .case-tbl td:nth-child(6){display:none}
+.jan-reg{margin-top:10px;padding:10px 12px;border:2px dashed #0369a1;border-radius:8px;background:#f0f7fd;font-size:13px}
+.jan-reg .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.jan-reg input{padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;min-width:120px;flex:1}
+.jan-reg button{padding:6px 10px;border:1px solid #0369a1;border-radius:6px;background:#fff;color:#0369a1;cursor:pointer;font-size:13px}
+.jan-reg button.p{background:#0369a1;color:#fff}
 .preset-preview{display:none;margin-top:10px;padding:10px 12px;background:#fff;border:1px solid var(--border);border-radius:8px;align-items:center;gap:12px;}
 .preset-preview.show{display:flex;}
 .preset-preview img{width:80px;height:80px;object-fit:contain;background:#fafafa;border-radius:6px;border:1px solid var(--border-light);flex-shrink:0;}
@@ -193,7 +202,7 @@ body.gs-mode .preset-cards{display:none!important;}
     <div>
       <h1><span class="ins-only">介護保険 福祉用具購入費支給申請書</span><span class="gs-only">一般販売（納品・請求書／領収証）</span></h1>
       <p><span class="ins-only"><span class="pm-juryo">受領委任払い用</span><span class="pm-shokan" style="background:#f59e0b;color:#fff;border-radius:4px;padding:0 6px;font-weight:700">償還払い用</span> ／ 自動入力フォーム（福山市）</span><span class="gs-only">介護保険を使わない販売 ／ 値引き・送料・粗利</span></p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-20-9　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-21-3　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -261,6 +270,7 @@ body.gs-mode .preset-cards{display:none!important;}
     <div class="sh"><div class="si">📋</div><span class="st">案件一覧</span></div>
     <div class="sb">
       <div class="f s2" style="flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div class="case-kind" id="caseKindTabs"><button type="button" data-k="ins" class="on" onclick="setCaseKind_('ins')">🏥 介護保険の案件</button><button type="button" data-k="gs" onclick="setCaseKind_('gs')">🛒 一般販売の案件</button></div>
         <input type="text" id="caseListSearch" placeholder="お客様名で絞り込み" oninput="renderCaseList()" style="max-width:240px;">
         <button class="btn bg" style="padding:8px 16px;min-width:auto;" onclick="refreshCaseList()">🔄 更新</button>
         <span id="caseListStatus" class="note"></span>
@@ -955,7 +965,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-10-20-9";
+const APP_VERSION = "2026-10-21-3";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -1284,11 +1294,35 @@ function statusBadgeHtml(status){
   return `<span class="status-badge" style="background:${info.color}1a;color:${info.color};border:1px solid ${info.color}66;">${xmlEscape(info.label)}</span>`;
 }
 
+// 案件一覧は「介護保険の案件」と「一般販売の案件」を分けて表示する（履歴を混ぜない）。画面の切替（介護保険／一般販売）に合わせて自動で切り替わる
+let caseKind_ = 'ins';
+function setCaseKind_(k){
+  caseKind_ = k === 'gs' ? 'gs' : 'ins';
+  document.body.classList.toggle('casekind-gs', caseKind_ === 'gs');
+  document.querySelectorAll('#caseKindTabs button').forEach(b => b.classList.toggle('on', b.dataset.k === caseKind_));
+  renderCaseList();
+}
+// 別の案件から、お客様の情報（氏名・住所・電話など）だけを新しい案件に入れる（介護保険⇔一般販売の間でも使える）
+async function useCustomerFrom_(caseId){
+  if (isFormDirty() && !confirm('入力中の内容を消して、このお客様の情報で新しい案件を始めます。よろしいですか？')) return;
+  let data;
+  try { data = await gasFetch("get", { id: caseId }); } catch(err){ return toast('❌ 読み込みに失敗しました：' + err.message, false); }
+  const v = (data.case && data.case.formData && data.case.formData.values) || {};
+  const mode = isGeneralSale() ? 'gs' : 'ins';
+  const oc = window.confirm; window.confirm = () => true; try { clearForm(); } finally { window.confirm = oc; }
+  currentCaseId = '';
+  const keys = mode === 'gs' ? ['name','kana','addr','aPhone'] : ['name','kana','addr','aPhone','bY','bM','bD','insNum','myNum','aAddr','aName','seihoGender','seihoSetainushi'];
+  keys.forEach(k => { const el = document.getElementById(k); if (el && v[k] != null) el.value = v[k]; });
+  if (mode === 'ins' && v.burdenRatio && v.burdenRatio !== 'self') document.getElementById('burdenRatio').value = v.burdenRatio;
+  setSaleMode(mode);
+  toast(`👤 ${v.name || 'お客様'}様の情報を入れました（新しい案件になります）`);
+}
 function renderCaseList(){
   const tbody = document.getElementById("caseListBody");
   if (!tbody) return;
   const q = g("caseListSearch");
   const rows = caseListCache
+    .filter(c => (caseKind_ === 'gs') === isGeneralSaleCase_(c))
     .filter(c => !q || (c.customerName||"").includes(q))
     .sort((a,b) => (b.updatedAt||"").localeCompare(a.updatedAt||""));
   if (!rows.length){
@@ -1299,7 +1333,7 @@ function renderCaseList(){
     const fy = fiscalYearOf(c.purchaseDate);
     const lim = fy !== null ? customerRemainingLimit(c.customerName, fy, null) : null;
     let limText = "-";
-    if (lim){
+    if (lim && !isGeneralSaleCase_(c)){
       limText = lim.remaining >= 0
         ? `${fy}年度：残り￥${fmtN(lim.remaining)}`
         : `${fy}年度：超過￥${fmtN(-lim.remaining)}`;
@@ -1326,6 +1360,7 @@ function renderCaseList(){
       <td>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;">
           <button class="btn bg" style="padding:5px 10px;min-width:auto;font-size:12px;" onclick="loadCaseById('${c.caseId}')">📂 読み込む</button>
+          <button class="btn bg" style="padding:4px 8px;min-width:auto;font-size:11px;" onclick="useCustomerFrom_('${c.caseId}')" title="このお客様の情報だけを使って、新しい案件を作る">👤 この方で新規</button>
           <button type="button" style="padding:2px 6px;min-width:auto;font-size:10px;border:1px solid var(--border);border-radius:5px;background:transparent;color:var(--danger, #c0392b);cursor:pointer;opacity:.75;" onclick="deleteCaseById('${c.caseId}','${xmlEscape(c.customerName||'').replace(/'/g,"\\'")}')">🗑 削除</button>
         </div>
       </td>
@@ -2263,7 +2298,8 @@ function onCatalogSearch(n) {
   }
   catalogSearchHits[n] = hits;
   if (hits.length === 0) {
-    box.innerHTML = `<div class="catalog-result-empty">「${xmlEscape(q)}」に一致する商品が見つかりません${isJan ? '（このJANは共通商品マスターにありません）' : ''}</div>`;
+    box.innerHTML = `<div class="catalog-result-empty">「${xmlEscape(q)}」に一致する商品が見つかりません${isJan ? '（このJANは共通商品マスターにありません → 下の欄から登録できます）' : ''}</div>`;
+    if (isJan) showJanRegister_(n, digits);
   } else {
     box.innerHTML = hits.map((h, idx) => {
       if (h.kind === 'cat') {
@@ -2352,6 +2388,7 @@ function onVariantKey_(e, n){
   if (e.key !== 'Enter') return; e.preventDefault();
   const v = document.getElementById(`variantQ${n}`).value.replace(/[\s-]/g, '');
   if (/^(\d{8}|\d{13})$/.test(v) && sharedByJan.has(v)) return chooseVariant_(n, encodeURIComponent(sharedByJan.get(v).key));
+  if (/^(\d{8}|\d{13})$/.test(v)) return showJanRegister_(n, v);
   const c = variantCands_(n, document.getElementById(`variantQ${n}`).value); if (c.length === 1) chooseVariant_(n, encodeURIComponent(c[0].m.key));
 }
 function chooseVariant_(n, keyEnc){
@@ -2362,6 +2399,81 @@ function chooseVariant_(n, keyEnc){
   if (!g(`i${n}p`)){ const pr = sharedPriceTaxIn_(m); if (pr != null) document.getElementById(`i${n}p`).value = pr; }
   const box = document.getElementById(`variant${n}`); box.dataset.open = ''; box.dataset.q = '';
   renderVariantBox_(n); toast(`✅ 品番を確定しました：${m.name}`);
+}
+// ============================================================
+// JANの登録（バーコードを読んでも出ない商品を、その場で共通商品マスターに登録する）
+// ①選んでいる品番（共通商品マスターの商品）にJANを付ける ②品目欄の商品名のまま新しく登録 のどちらか。次からはバーコードで出る
+// ============================================================
+function janRegBox_(n){
+  let b = document.getElementById(`janReg${n}`);
+  if (!b){ const v = document.getElementById(`variant${n}`); if (!v) return null; b = document.createElement('div'); b.id = `janReg${n}`; b.className = 'jan-reg'; b.style.display = 'none'; v.parentNode.insertBefore(b, v.nextSibling); }
+  return b;
+}
+function showJanRegister_(n, jan){
+  const b = janRegBox_(n); if (!b) return;
+  if (!getZaikoUrl()){ b.style.display = ''; b.innerHTML = `📷 JAN <b>${xmlEscape(jan)}</b> は共通商品マスターにありません。登録するには⚙設定で在庫システムのURLと合言葉を入れてください。<div class="row"><button type="button" onclick="this.closest('.jan-reg').style.display='none'">閉じる</button></div>`; return; }
+  const cur = variantCurrent_(n), name = g(`i${n}n`), d = selectedItemData[n] || {};
+  b.dataset.jan = jan; b.style.display = ''; janPhotos_[n] = [];
+  b.innerHTML = `📷 JAN <b>${xmlEscape(jan)}</b> は共通商品マスターにありません。登録すると、次からバーコードで出ます（在庫システムにも入ります）。
+    ${cur && !cur.jan ? `<div class="row"><button type="button" class="p" onclick="registerJan_(${n}, 'bind')">✅ 選んでいる品番「${xmlEscape(cur.name)}」のJANにする</button></div>` : ''}
+    <div class="row"><input id="janRegName${n}" placeholder="商品名（色・高さまで）" value="${xmlEscape(name || '')}"><input id="janRegMaker${n}" placeholder="メーカー" value="${xmlEscape(g(`i${n}mk`) || d.maker || '')}" style="max-width:180px"><input id="janRegModel${n}" placeholder="メーカー品番（任意）" value="${xmlEscape(d.model || '')}" style="max-width:160px"></div>
+    <div class="row"><label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #0369a1;border-radius:6px;background:#fff;color:#0369a1;cursor:pointer;">📷 撮って読む<input type="file" accept="image/*" capture="environment" style="display:none" onchange="readJanPhoto_(${n}, this)"></label><label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #0369a1;border-radius:6px;background:#fff;color:#0369a1;cursor:pointer;">🖼 写真を選ぶ（複数OK）<input type="file" accept="image/*" multiple style="display:none" onchange="readJanPhoto_(${n}, this)"></label><span id="janRegMsg${n}" class="note">箱の正面・側面・ラベルなど、何枚でも足せます（最大4枚まとめて読みます）</span></div>
+    <div class="row"><button type="button" class="p" onclick="registerJan_(${n}, 'new')">＋ この商品名でJANを登録して、品目${n}に入れる</button><button type="button" onclick="this.closest('.jan-reg').style.display='none'">閉じる</button></div>`;
+}
+// 箱やラベルの写真から、商品名・メーカー・品番（色・サイズ）をAIで読み取って登録欄に入れる（⚙のAPIキーを使う）
+// 写真は何回かに分けて足せる（正面＋ラベルなど）。足すたびに、それまでの写真（最新4枚）をまとめて読み直す
+const janPhotos_ = {};
+async function readJanPhoto_(n, input){
+  const files = Array.from(input.files || []); if (!files.length) return;
+  const msg = document.getElementById(`janRegMsg${n}`), jan = (janRegBox_(n) || {}).dataset ? janRegBox_(n).dataset.jan : '';
+  if (!getApiKey()){ msg.textContent = '⚠ ⚙設定でAPIキーを登録すると使えます'; return; }
+  try {
+    for (const f of files){
+      const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      const sc = Math.min(1, 1400 / Math.max(img.width, img.height)), cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      (janPhotos_[n] = janPhotos_[n] || []).push(cv.toDataURL('image/jpeg', 0.85).split(',')[1]);
+    }
+    janPhotos_[n] = janPhotos_[n].slice(-4);
+    msg.textContent = `🔍 写真${janPhotos_[n].length}枚を読み取っています…`;
+    const prompt = `福祉用具（介護用品）の箱・ラベル・本体の写真（${janPhotos_[n].length}枚、同じ商品）です。JANコードは ${jan} です。写っている文字から、次をJSONだけで答えてください（説明文は不要）。
+{"name":"商品名（シリーズ名＋タイプ。色・サイズ・高さが分かれば最後に（色）［サイズ］の形で付ける。「シャワーチェア」などの一般名は付けない）","maker":"メーカー名","model":"メーカー品番（型番）"}
+読めない項目は空文字にしてください。推測で作らないでください。`;
+    const text = await callClaudeAPI([{ role:'user', content:[...janPhotos_[n].map(d => ({ type:'image', source:{ type:'base64', media_type:'image/jpeg', data:d } })), { type:'text', text:prompt }] }], 300);
+    const m = text.match(/\{[\s\S]*\}/); const j = m ? JSON.parse(m[0]) : {};
+    if (j.name) document.getElementById(`janRegName${n}`).value = j.name;
+    if (j.maker) document.getElementById(`janRegMaker${n}`).value = j.maker;
+    if (j.model) document.getElementById(`janRegModel${n}`).value = j.model;
+    msg.textContent = (j.name ? `✅ 写真${janPhotos_[n].length}枚から読み取りました。内容を確認してから登録してください` : '⚠ 商品名が読み取れませんでした。別の面の写真を足すか、手で入れてください') + '（写真はさらに足せます）';
+  } catch(err){ msg.textContent = '❌ 読み取れませんでした：' + String(err.message || err).slice(0, 80); }
+  input.value = '';
+}
+async function registerJan_(n, mode){
+  const b = janRegBox_(n), jan = b && b.dataset.jan; if (!jan) return;
+  const staff = getDStaffValue() || '申請システム';
+  let e, slim;
+  if (mode === 'bind'){
+    const cur = variantCurrent_(n); if (!cur) return;
+    e = { key: cur.key, jan }; slim = Object.assign({}, cur, { jan });
+  } else {
+    const name = (document.getElementById(`janRegName${n}`).value || '').trim(); if (!name) return toast('⚠ 商品名を入れてください', false);
+    const maker = (document.getElementById(`janRegMaker${n}`).value || '').trim(), model = (document.getElementById(`janRegModel${n}`).value || '').trim();
+    const d = selectedItemData[n] || {}, price = gi(`i${n}p`);
+    e = { key: jan, jan, name, maker, model, shumoku: g(`i${n}t`) || '', retail: price > 0 ? Math.round(price / 1.1) : null, webcd: d.catalogCode || '' };
+    slim = { key: jan, jan, name, model, maker, shumoku: e.shumoku, tais: '', retail: e.retail, cost: null, webcd: e.webcd, photo: '' };
+  }
+  try { await zaikoPost_({ action: 'masterSave', entries: [e], user: staff, quiet: true }); }
+  catch(err){ return toast('❌ 登録できませんでした：' + err.message, false); }
+  const list = SHARED_MASTER.filter(m => m.key !== slim.key).concat([slim]);
+  setSharedMaster_(list, new Date().toLocaleString('ja-JP'));
+  try { localStorage.setItem(SHARED_MASTER_CACHE, JSON.stringify({ at: sharedLoadedAt, list })); } catch(_){}
+  if (mode === 'new'){
+    if (!selectedItemData[n]){ selectSharedItem(n, slim); }
+    else { document.getElementById(`i${n}n`).value = slim.name; if (slim.maker && !g(`i${n}mk`)) document.getElementById(`i${n}mk`).value = slim.maker; attachSharedInfo_(n, slim); }
+  } else attachSharedInfo_(n, slim);
+  b.style.display = 'none';
+  toast(`✅ JAN ${jan} を登録しました：${slim.name}`);
 }
 function selectSharedItem(n, m) {
   document.querySelectorAll(`#pcards${n} .pcard`).forEach(c => c.classList.remove('selected'));
@@ -5301,7 +5413,10 @@ function generateReceipt(){
         <span class="yen">－</span>
       </div>
       <div class="desc">${descNote}</div>
-      ${shokan ? `<div class="bdtop">福祉用具購入に要した費用の総額<b>￥${fmtN(total)}</b></div>
+      ${general ? `<div class="bdtop">商品代金の総額（税込）<b>￥${fmtN(total)}<span style="font-weight:400;font-size:10px;">（内消費税等 ￥${fmtN(receiptTax)}）</span></b></div>
+      <div class="bdtop2" style="visibility:hidden">一般販売</div>
+      <table class="bdtable" style="visibility:hidden">
+        ${[0,1,2,3].map(() => '<tr style="height:18px"><td colspan="2">&nbsp;</td><td class="bdval">&nbsp;</td></tr>').join('')}` : shokan ? `<div class="bdtop">福祉用具購入に要した費用の総額<b>￥${fmtN(total)}</b></div>
       <div class="bdtop2">償還払い（全額お支払い済み。後日、市からご本人の口座へ払い戻し）　｜　今年度の支給限度額の残り　￥${fmtN(limitRemain)}${overAmount > 0 ? `　<b style="color:#b91c1c">（超過分 ￥${fmtN(overAmount)} は払い戻しの対象外）</b>` : ''}</div>
       <table class="bdtable">
         ${[0,1,2].map(i => { const it = items.filter(x => x.n !== 'ship')[i]; return `<tr style="height:18px"><td class="bdlabel" colspan="2" style="max-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it ? xmlEscape(appFormItemName_(it.name) || '福祉用具') : '&nbsp;'}</td><td class="bdval">${it ? '￥' + fmtN(it.price) : '&nbsp;'}</td></tr>`; }).join('')}
@@ -5473,6 +5588,7 @@ function setSaleMode(mode){
 }
 function applySaleModeUI_(){
   const gs = isGeneralSale();
+  if (typeof setCaseKind_ === 'function' && ((caseKind_ === 'gs') !== gs)) setCaseKind_(gs ? 'gs' : 'ins');
   document.body.classList.toggle('gs-mode', gs);
   const a = document.getElementById('modeIns'), b = document.getElementById('modeGs');
   if (a && b){ a.classList.toggle('on', !gs); b.classList.toggle('on', gs); a.setAttribute('aria-selected', String(!gs)); b.setAttribute('aria-selected', String(gs)); }
