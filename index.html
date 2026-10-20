@@ -189,7 +189,7 @@ body.gs-mode .preset-cards{display:none!important;}
     <div>
       <h1><span class="ins-only">介護保険 福祉用具購入費支給申請書</span><span class="gs-only">一般販売（納品・請求書／領収証）</span></h1>
       <p><span class="ins-only">受領委任払い用 ／ 自動入力フォーム（福山市）</span><span class="gs-only">介護保険を使わない販売 ／ 値引き・送料・粗利</span></p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-20-4　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-20-5　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -948,7 +948,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-10-20-4";
+const APP_VERSION = "2026-10-20-5";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -3086,6 +3086,70 @@ function setCellStyleInXml_(xml, ref, styleIndex){
     : m[0].replace(/<c r="[^"]+"/, h => `${h} s="${styleIndex}"`);
   return xml.replace(m[0], cell);
 }
+
+// ============================================================
+// 申請書の文字の大きさ・配置（2026-10-20、赤文字の校正見本に合わせる）
+// 元のxfを複製し、フォントの大きさ・配置・折り返しだけを変えた新しいxfを追加して、対象セルだけ差し替える
+// ============================================================
+function addStyledXf_(st, baseIdx, sp){
+  const xm0 = st.match(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/); if (!xm0) return null;
+  const xfs0 = xm0[2].match(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g) || [];
+  let neo = xfs0[baseIdx]; if (!neo) return null;
+  if (sp.sz){
+    const fm = st.match(/<fonts count="(\d+)"([^>]*)>([\s\S]*?)<\/fonts>/);
+    if (fm){
+      const fonts = fm[3].match(/<font\b[^>]*?(?:\/>|>[\s\S]*?<\/font>)/g) || [];
+      const fid = parseInt((neo.match(/\sfontId="(\d+)"/) || [0, '0'])[1], 10);
+      let bf = fonts[fid] || '<font/>';
+      if (/^<font\b[^>]*\/>$/.test(bf)) bf = bf.replace(/\/>$/, '></font>');
+      const nf = /<sz\b[^>]*\/>/.test(bf) ? bf.replace(/<sz\b[^>]*\/>/, `<sz val="${sp.sz}"/>`) : bf.replace(/^<font\b([^>]*)>/, `<font$1><sz val="${sp.sz}"/>`);
+      st = st.replace(fm[0], `<fonts count="${fonts.length + 1}"${fm[2]}>${fm[3]}${nf}</fonts>`);
+      neo = /\sfontId="\d+"/.test(neo) ? neo.replace(/\sfontId="\d+"/, ` fontId="${fonts.length}"`) : neo.replace(/^<xf\b/, `<xf fontId="${fonts.length}"`);
+      if (!/applyFont="1"/.test(neo)) neo = neo.replace(/^<xf\b/, '<xf applyFont="1"');
+    }
+  }
+  const al = {};
+  const am = neo.match(/<alignment\b([^>]*)\/>/);
+  if (am) (am[1].match(/(\w+)="[^"]*"/g) || []).forEach(kv => { const [k, v] = kv.split('='); al[k] = v.replace(/"/g, ''); });
+  if (sp.h) al.horizontal = sp.h;
+  al.vertical = sp.v || al.vertical || 'center';
+  if (sp.wrap){ al.wrapText = '1'; delete al.shrinkToFit; }
+  const alXml = '<alignment ' + Object.entries(al).map(([k, v]) => `${k}="${v}"`).join(' ') + '/>';
+  if (am) neo = neo.replace(am[0], alXml);
+  else if (/\/>\s*$/.test(neo)) neo = neo.replace(/\/>\s*$/, `>${alXml}</xf>`);
+  else neo = neo.replace(/<\/xf>\s*$/, `${alXml}</xf>`);
+  if (!/applyAlignment="1"/.test(neo)) neo = neo.replace(/^<xf\b/, '<xf applyAlignment="1"');
+  const xm = st.match(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/);
+  const xfs = xm[2].match(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g) || [];
+  return { xml: st.replace(xm[0], `<cellXfs count="${xfs.length + 1}">${xm[2]}${neo}</cellXfs>`), index: xfs.length };
+}
+async function styleCellsInSheet_(zip, xml, specs){
+  const sf = zip.file('xl/styles.xml'); if (!sf) return xml;
+  let st = await sf.async('string'); const cache = {};
+  for (const sp of specs){
+    const base = getCellStyleId_(xml, sp.ref); if (base === null) continue;
+    const key = base + '|' + [sp.sz, sp.h, sp.v, sp.wrap].join(',');
+    if (cache[key] === undefined){ const r = addStyledXf_(st, base, sp); if (!r) continue; st = r.xml; cache[key] = r.index; }
+    xml = setCellStyleInXml_(xml, sp.ref, cache[key]);
+  }
+  zip.file('xl/styles.xml', st);
+  return xml;
+}
+// 枠（幅w・高さh、ポイント）に文章が収まる一番大きい文字サイズを返す（折り返し前提。半角は約半分の幅で数える）
+function fitFontPt_(text, w, h, maxS, minS){
+  const units = [...String(text || '')].reduce((a, c) => a + (c.charCodeAt(0) < 0x80 || /[ｦ-ﾟ]/.test(c) ? 0.55 : 1), 0);
+  for (let sz = maxS; sz >= minS; sz -= 0.5){
+    const perLine = Math.max(1, Math.floor(w * 0.92 / sz)), lines = Math.max(1, Math.floor(h / (sz * 1.3)));
+    if (Math.ceil(units / perLine) <= lines) return sz;
+  }
+  return minS;
+}
+// 申請書の商品名：「シャワーチェア」の文言は付けない（種目名と写真で分かるため。2026-10-20指示）
+function appFormItemName_(name){
+  const n = String(name || '').trim();
+  const t = n.replace(/^シャワーチェア\s*/, '').trim();
+  return t || n;
+}
 // baseXfIndex のxfを複製し、水平配置だけ horizontal に変えたxfを末尾に追加してその番号を返す
 function addAlignedXf_(stylesXml, baseXfIndex, horizontal){
   const m = stylesXml.match(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/);
@@ -3462,7 +3526,7 @@ async function doGenerate(){
     const bizRow = base+3;
     if (it.type) set(`C${base+1}`, it.type);         // 種目名
     if (it.maker) set(`K${base+1}`, it.maker);        // 製造事業者名
-    if (it.name) set(`C${base+3}`, it.name);          // 商品名
+    if (it.name) set(`C${base+3}`, appFormItemName_(it.name));          // 商品名（「シャワーチェア」は付けない）
     if (it.seller) set(`K${base+3}`, it.seller);      // 販売事業者名
     if (it.price) set(`R${base}`, `${fmtN(it.price)}円`); // 購入金額
     if (it.biznum) digits(it.biznum, bizRow, 10);     // 事業所番号（1マス1桁）
@@ -3496,6 +3560,20 @@ async function doGenerate(){
   // フリガナ（A6:Q6）・氏名（A7:Q7）は結合セルの中央に配置する。
   // 様式の元の書式が左寄せのため、そのままだと枠の左端にべったり寄ってしまう
   xml = await centerCellsInSheet_(zip, xml, ['A6','A7']);
+  // 商品名・必要な理由は、長くても枠に収まるよう折り返し＋文字の大きさを自動で調整する
+  // 文字の大きさ・配置は償還払い用と同じ考え方（2026-10-20 赤文字の校正見本）にそろえる。氏名20pt・被保険者番号14ptは従来どおり
+  { const sp = [], cols10 = ['R','S','T','U','V','W','X','Y','Z','AA'];
+    sp.push({ref:'A6', sz:14, h:'center'}, {ref:'R6', sz:18, h:'center'}, {ref:'A9', sz:18, h:'center'});
+    [13,19,25].forEach((base, idx) => {
+      sp.push({ref:`R${base}`, sz:16, h:'right'}, {ref:`W${base}`, sz:16, h:'right'}, {ref:`C${base+1}`, sz:12, h:'left'}, {ref:`K${base+1}`, sz: fitFontPt_(items[idx].maker, 175, 18, 12, 8), h:'left'},
+        {ref:`K${base+3}`, sz:11, h:'center'});
+      cols10.forEach(c => sp.push({ref:`${c}${base+3}`, sz:14, h:'center'}));
+      if (idx+1 > visibleItemCount) return; const it = items[idx];
+      if (it.name) sp.push({ref:`C${base+3}`, sz: fitFontPt_(appFormItemName_(it.name), 201, 31.5, 11, 7), h:'center', wrap:true});
+      if (it.reason) sp.push({ref:`C${base+5}`, sz: fitFontPt_(it.reason, 708, 46.5, 11, 6.5), h:'left', v:'top', wrap:true});
+    });
+    sp.push({ref:'H35', sz:18, h:'center', wrap:true}, {ref:'H37', sz:18, h:'center'}, {ref:'R37', sz:14});
+    xml = await styleCellsInSheet_(zip, xml, sp); }
 
   zip.file(sheetPath, xml);
   const blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -3538,7 +3616,7 @@ async function doGenerateShokan_(nm, kna, addr, appAddr, appName, items, hist){
     const it = items[idx];
     if (it.type) set(`C${base+1}`, it.type);
     if (it.maker) set(`K${base+1}`, it.maker);
-    if (it.name) set(`C${base+3}`, it.name);
+    if (it.name) set(`C${base+3}`, appFormItemName_(it.name));
     if (it.seller) set(`K${base+3}`, it.seller);
     if (it.price) set(`R${base}`, `${fmtN(it.price)}円`);
     if (it.biznum) digits(it.biznum, base+3, 10);
@@ -3561,16 +3639,30 @@ async function doGenerateShokan_(nm, kna, addr, appAddr, appName, items, hist){
   set('G43', g('bkKana'));
   // 提出者記入欄：事業者（アスポート）が提出する
   set('A65', ' ■');
-  const st = getDStaffValue();
-  if (st) set('I64', `（名前）　${st}`);
-  set('I65', `（事業所等名称）　${g('dBiz') || '株式会社アスポート'}`);
-  if (g('dPhone')) set('I66', `（連絡先）　${g('dPhone')}`);
+  const st = getDStaffValue(), pad = l => l + '　'.repeat(Math.max(1, 9 - l.length));   // 名前・事業所・連絡先の書き出しをそろえる
+  if (st) set('I64', `${pad('（名前）')}${st}`);
+  set('I65', `${pad('（事業所等名称）')}${g('dBiz') || '株式会社アスポート'}`);
+  if (g('dPhone')) set('I66', `${pad('（連絡先）')}${g('dPhone')}`);
   hist.forEach((h,i)=>{ const row = 78+i;
     if (h.date) set(`A${row}`, h.date);
     if (h.price) set(`I${row}`, `${fmtN(h.price)}円`);
     if (h.name) set(`P${row}`, h.name);
   });
-  xml = await centerCellsInSheet_(zip, xml, ['A7','A8']);
+  // 文字の大きさ・配置（2026-10-20 赤文字の校正見本どおり）。商品名・理由は枠に収まるよう自動で縮める
+  { const sp = [], cols10 = ['R','S','T','U','V','W','X','Y','Z','AA'];
+    cols10.forEach(c => sp.push({ref:`${c}4`, sz:12, h:'center'}));
+    sp.push({ref:'A7', sz:14, h:'center'}, {ref:'A8', sz:18, h:'center'}, {ref:'R7', sz:18, h:'center'}, {ref:'A10', sz:18, h:'center'});
+    [14,20,26].forEach((base, idx) => {
+      sp.push({ref:`R${base}`, sz:16, h:'right'}, {ref:`W${base}`, sz:16, h:'right'}, {ref:`C${base+1}`, sz:12, h:'left'}, {ref:`K${base+1}`, sz: fitFontPt_(items[idx].maker, 165, 18, 12, 8), h:'left'},
+        {ref:`K${base+3}`, sz:11, h:'center'});
+      cols10.forEach(c => sp.push({ref:`${c}${base+3}`, sz:14, h:'center'}));
+      if (idx+1 > visibleItemCount) return; const it = items[idx];
+      if (it.name) sp.push({ref:`C${base+3}`, sz: fitFontPt_(appFormItemName_(it.name), 170, 27, 11, 7), h:'center', wrap:true});
+      if (it.reason) sp.push({ref:`C${base+5}`, sz: fitFontPt_(it.reason, 633, 27, 10, 6), h:'left', v:'top', wrap:true});
+    });
+    sp.push({ref:'H36', sz:18, h:'center'}, {ref:'H38', sz:18, h:'center'}, {ref:'R38', sz:14});
+    ['I64','I65','I66'].forEach(r => sp.push({ref:r, sz:14, h:'left'}));
+    xml = await styleCellsInSheet_(zip, xml, sp); }
   zip.file(sheetPath, xml);
   const blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url = URL.createObjectURL(blob);
