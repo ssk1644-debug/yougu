@@ -106,6 +106,10 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
 .variant-box .vb-item small{color:var(--muted);font-size:11px;margin-top:2px}
 .variant-box .vb-empty{color:var(--muted);font-size:12px;padding:6px 2px}
 body:not(.pay-shokan) .pm-shokan{display:none!important}
+.pay-banner{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;background:#fff7e6;border:2px solid #f59e0b;color:#92400e;border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:14px}
+.pay-banner button{margin-left:auto;padding:5px 12px;border:1px solid #d97706;border-radius:6px;background:#fff;color:#b45309;cursor:pointer;font-size:12px}
+.pay-tag{display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;background:#f59e0b;color:#fff;font-weight:700;font-size:13px;white-space:nowrap}
+#payMethod.is-shokan{border:2px solid #f59e0b;background:#fff7e6;font-weight:700}
 body.pay-shokan .pm-juryo{display:none!important}
 .preset-preview{display:none;margin-top:10px;padding:10px 12px;background:#fff;border:1px solid var(--border);border-radius:8px;align-items:center;gap:12px;}
 .preset-preview.show{display:flex;}
@@ -188,8 +192,8 @@ body.gs-mode .preset-cards{display:none!important;}
     <div class="hi">📋</div>
     <div>
       <h1><span class="ins-only">介護保険 福祉用具購入費支給申請書</span><span class="gs-only">一般販売（納品・請求書／領収証）</span></h1>
-      <p><span class="ins-only">受領委任払い用 ／ 自動入力フォーム（福山市）</span><span class="gs-only">介護保険を使わない販売 ／ 値引き・送料・粗利</span></p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-20-7　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <p><span class="ins-only"><span class="pm-juryo">受領委任払い用</span><span class="pm-shokan" style="background:#f59e0b;color:#fff;border-radius:4px;padding:0 6px;font-weight:700">償還払い用</span> ／ 自動入力フォーム（福山市）</span><span class="gs-only">介護保険を使わない販売 ／ 値引き・送料・粗利</span></p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-20-9　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -205,6 +209,7 @@ body.gs-mode .preset-cards{display:none!important;}
     <button type="button" id="modeIns" class="on" onclick="setSaleMode('ins')">🏥 介護保険の申請（特定福祉用具）</button>
     <button type="button" id="modeGs" onclick="setSaleMode('gs')">🛒 一般販売（介護保険を使わない）</button>
   </div>
+  <div class="pay-banner pm-shokan ins-only">💴 <b>償還払いで作成中</b>　申請書は「償還払い用」、請求書・領収証は<b>全額</b>になります。<button type="button" onclick="document.getElementById('payMethod').value='juryo';applyPayMethodUI_();toast('受領委任払いに戻しました')">受領委任払いに戻す</button></div>
   <div class="mode-note gs-only">一般販売では、お客様・商品・価格と、納品・請求書／領収証に必要な欄だけを表示しています。案件一覧は介護保険の申請と共通です。</div>
   <div class="info ins-only">ℹ️&nbsp; 商品カードを選ぶと種目・商品名・金額が自動入力されます。理由はタグをクリックして組み合わせるか、キーワードで追加できます。</div>
 
@@ -337,7 +342,7 @@ body.gs-mode .preset-cards{display:none!important;}
         <div class="f"><label><span class="ins-only">申請者電話番号（利用者ご本人の連絡先）<span class="req">*</span></span><span class="gs-only">お客様の電話番号</span></label><input type="tel" id="aPhone" placeholder="例：084-123-4567"></div>
         <div class="f s2 ins-only">
           <label>支払い方法（申請書の様式）</label>
-          <select id="payMethod" onchange="applyPayMethodUI_()">
+          <select id="payMethod" autocomplete="off" onchange="applyPayMethodUI_()">
             <option value="juryo" selected>受領委任払い（お客様は負担割合分だけお支払い・市からアスポートへ支給）</option>
             <option value="shokan">償還払い（お客様が全額をお支払い・あとで市からお客様の口座へ払い戻し）</option>
           </select>
@@ -345,6 +350,7 @@ body.gs-mode .preset-cards{display:none!important;}
         </div>
         <div class="f s2 ins-only">
           <label>新規のお客様ですか？（重要事項説明書）</label>
+          <input type="hidden" id="sigRole" value="self">
           <select id="newCustomer">
             <option value="" selected>これまでに購入したことがあるお客様（重要事項説明書は不要）</option>
             <option value="1">新規のお客様（重要事項説明書も一緒に出す）</option>
@@ -550,6 +556,7 @@ body.gs-mode .preset-cards{display:none!important;}
 </div>
 
 <div class="actions">
+  <span class="pay-tag pm-shokan ins-only">💴 償還払い</span>
   <button class="btn bg" onclick="clearForm()">🗑 クリア</button>
   <button class="btn bg" id="saveCaseBtn" onclick="saveCurrentCase()">💾 この案件を保存/更新</button>
   <button class="btn bg ins-only" id="pamphletBtn" onclick="generatePamphlet()">🖼 商品パンフレット資料を出力</button>
@@ -948,7 +955,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-10-20-7";
+const APP_VERSION = "2026-10-20-9";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -2076,6 +2083,20 @@ function buildItems() {
     </div>
     <div id="gsTotals" style="margin-top:8px;font-size:13px;"></div>`;
   addBtn.parentNode.insertBefore(gs, addBtn.nextSibling);
+  // 償還払いのときだけ出す：値引き（％）と端数の切り捨て。各品目の購入金額（申請書・請求書・領収証）に反映する
+  const sk = document.createElement('div');
+  sk.id = 'shkBox'; sk.className = 'pm-shokan ins-only';
+  sk.style.cssText = 'margin-top:14px;border:2px solid #f59e0b;border-radius:10px;padding:14px;background:#fff7e6;';
+  sk.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <b style="font-size:14px;color:#b45309;">💴 償還払いの値引き</b>
+      <span><input type="number" id="shkPct" min="0" max="50" step="0.5" placeholder="0" style="width:80px;display:inline-block;" oninput="applyShokanDiscount_()"> ％引き</span>
+      <span>端数：<select id="shkRound" style="width:auto;display:inline-block;" onchange="applyShokanDiscount_()"><option value="1">そのまま（1円単位）</option><option value="10" selected>10円未満を切り捨て</option><option value="100">100円未満を切り捨て</option><option value="1000">1,000円未満を切り捨て</option></select></span>
+      <span style="flex:1"></span>
+      <button type="button" class="btn bg" style="padding:5px 10px;min-width:auto;font-size:12px;" onclick="document.getElementById('shkPct').value='';applyShokanDiscount_();">元の金額に戻す</button>
+    </div>
+    <div id="shkRows" style="margin-top:8px;font-size:13px;"></div>
+    <div class="note">※値引き後の金額が、申請書・請求書・領収証の購入金額になります（値引きの額は書類には載りません）。</div>`;
+  gs.parentNode.insertBefore(sk, gs.nextSibling);
   [1,2,3].forEach(n => { const p = document.getElementById(`i${n}p`); if (p) p.addEventListener('input', () => { if (!gsSyncing_) renderGeneralSaleBox(); }); });
 }
 
@@ -2517,8 +2538,9 @@ window.addEventListener('message', (e) => {
     if (e.source) e.source.postMessage({ type: 'asport-catalog-crop-ack', reqId: e.data.reqId }, '*');
     refreshPopupContent_(e.source);
   } else if (e.data.type === 'asport-review-signature-confirm' && typeof e.data.dataUrl === 'string'){
-    // 「適合確認シート確認ページ」でお客様がその場でサインし確定した内容を反映する
+    // 「適合確認シート確認ページ」でお客様がその場でサインし確定した内容を反映する（重要事項説明書の同意欄にも使う）
     setSignatureFromDataUrl(e.data.dataUrl);
+    { const r = document.getElementById('sigRole'); if (r) r.value = e.data.role === 'family' ? 'family' : 'self'; }
     if (e.source) e.source.postMessage({ type: 'asport-review-ack', reqId: e.data.reqId }, '*');
   } else if (e.data.type === 'asport-review-signature-paper'){
     // 「紙にサインをもらう」が選択された場合：サイン欄は空欄のまま（従来通り、紙運用のお客様に対応）
@@ -2539,6 +2561,8 @@ window.addEventListener('message', (e) => {
           if (g('newCustomer') === '1' && !isGeneralSale()) generateJusetsu();   // 新規のお客様は重要事項説明書も
         } else if (which === 'application') {
           await generateExcel();
+        } else if (which === 'jusetsu') {
+          generateJusetsu();
         }
       } catch (err) {
         console.error(err);
@@ -3659,10 +3683,11 @@ async function doGenerateShokan_(nm, kna, addr, appAddr, appName, items, hist){
   set('G43', g('bkKana'));
   // 提出者記入欄：事業者（アスポート）が提出する
   set('A65', ' ■');
-  const st = getDStaffValue(), pad = l => l + '　'.repeat(Math.max(1, 8 - l.length));   // 名前・事業所・連絡先の書き出しをそろえる
-  if (st) set('I64', `${pad('（名前）')}${st}`);
-  set('I65', `${pad('（事業所等名称）')}${g('dBiz') || '株式会社アスポート'}`);
-  if (g('dPhone')) set('I66', `${pad('（連絡先）')}${g('dPhone')}`);
+  // 値は様式の記入欄（O〜AA列の結合欄）に入れる。I列は「（名前）」などの見出しのまま
+  const st = getDStaffValue();
+  if (st) set('O64', st);
+  set('O65', g('dBiz') || '株式会社アスポート');
+  if (g('dPhone')) set('O66', g('dPhone'));
   hist.forEach((h,i)=>{ const row = 78+i;
     if (h.date) set(`A${row}`, h.date);
     if (h.price) set(`I${row}`, `${fmtN(h.price)}円`);
@@ -3681,7 +3706,7 @@ async function doGenerateShokan_(nm, kna, addr, appAddr, appName, items, hist){
       if (it.reason) sp.push({ref:`C${base+5}`, sz: fitFontPt_(it.reason, 633, 27, 10, 6), h:'left', v:'top', wrap:true});
     });
     sp.push({ref:'H36', sz:18, h:'center'}, {ref:'H38', sz:18, h:'center'}, {ref:'R38', sz:14});
-    ['I64','I65','I66'].forEach(r => sp.push({ref:r, sz:14, h:'left', wrap:false}));
+    ['O64','O65','O66'].forEach(r => sp.push({ref:r, sz:14, h:'left', wrap:false}));
     xml = await styleCellsInSheet_(zip, xml, sp); }
   zip.file(sheetPath, xml);
   const blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -4908,7 +4933,9 @@ function buildConfirmReviewData_(){
       ['介護ベッドに係る事故の危険性及び対応策等の説明をいたしました。', false],
       ['選択制（貸与・販売）対象の福祉用具の提供について説明いたしました。', true]
     ],
-    signatureDataUrl: reviewSignatureDataUrl
+    signatureDataUrl: reviewSignatureDataUrl,
+    jusetsu: g('newCustomer') === '1' && !isGeneralSale(),
+    sigRole: g('sigRole') || 'self'
   };
 }
 
@@ -4925,7 +4952,7 @@ function buildConfirmReviewHtml_(data){
     ['問題なし', data.tdOk], ['再説明', data.tdReExplain], ['再調整', data.tdReAdjust], ['変更提案', data.tdChange]
   ].map(([l,c]) => chip(l,c)).join('');
   // サイン画像はscriptタグの中にJSONとして埋め込む（閉じタグ文字列を含み得るdata URLへの対策で`<`は<へ変換）
-  const initDataJson = JSON.stringify({ signatureDataUrl: data.signatureDataUrl || '' }).replace(/</g, '\\u003c');
+  const initDataJson = JSON.stringify({ signatureDataUrl: data.signatureDataUrl || '', sigRole: data.sigRole || 'self' }).replace(/</g, '\\u003c');
 
   const html = `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
@@ -5006,10 +5033,19 @@ function buildConfirmReviewHtml_(data){
     <div class="rv-row"><span class="lbl">電話</span><span class="val">${escHtml(data.dPhone)}</span></div>
   </div>
 
+  ${data.jusetsu ? `<div class="rv-card" style="border:2px solid #0369a1;">
+    <div class="rv-sec-title">📑 重要事項説明書（福祉用具販売）— 新規のお客様</div>
+    <div class="rv-note" style="font-size:14px;">重要事項説明書の内容をご説明し、同意をいただきます。<b>下のサインは、適合確認シートの「利用者（代理人）様」欄と、重要事項説明書の同意欄の両方に入ります。</b></div>
+    <button type="button" class="rv-btn" id="jusetsuViewBtn" style="margin-top:8px;">📑 重要事項説明書の内容を見る（7ページ）</button>
+  </div>` : ''}
+
   <div class="rv-card">
-    <div class="rv-sec-title">導入時サイン（利用者・代理人様）</div>
+    <div class="rv-sec-title">導入時サイン（利用者・代理人様）${data.jusetsu ? '<span style="font-size:13px;color:#0369a1;">　※適合確認シート・重要事項説明書 共通</span>' : ''}</div>
     <div id="sigPendingNote">
       <div class="rv-note">※上記の内容にお間違いがなければ、枠内にサインしてください。紙にサインをもらう場合は「紙にサインをもらう」を選択してください。</div>
+      <div class="rv-note" style="display:flex;gap:16px;flex-wrap:wrap;font-size:14px;margin:6px 0;"><b>サインする方：</b>
+        <label><input type="radio" name="sigRole" value="self" checked> ご本人</label>
+        <label><input type="radio" name="sigRole" value="family"> ご家族（代表）・代理人</label></div>
       <div id="sigPadWrap" class="rv-sig-frame"><canvas id="sigCanvas" width="900" height="260"></canvas></div>
       <div id="sigActions" class="rv-sig-actions">
         <button type="button" class="rv-btn" id="sigClearBtn">🗑 サインをクリア</button>
@@ -5028,6 +5064,7 @@ function buildConfirmReviewHtml_(data){
       <button type="button" class="rv-btn primary review-out-btn" data-which="conformity" disabled>📋 適合確認シートを出力</button>
       <button type="button" class="rv-btn primary review-out-btn" data-which="invoice_receipt" disabled>🧾 請求書・領収証を出力</button>
       <button type="button" class="rv-btn primary review-out-btn" data-which="application" disabled>📄 申請書一式を出力</button>
+      ${data.jusetsu ? '<button type="button" class="rv-btn primary review-out-btn" data-which="jusetsu" disabled>📑 重要事項説明書を出力（サイン入り）</button>' : ''}
     </div>
     <div class="rv-disclaimer">出力される書類の内容確認・提出の最終確認は、担当スタッフが行ってください。</div>
   </div>
@@ -5124,7 +5161,8 @@ function buildConfirmReviewHtml_(data){
   document.getElementById('sigConfirmBtn').addEventListener('click', function(){
     if (!hasDrawing){ alert('サインが入力されていません。枠内にサインしてから確定してください。'); return; }
     var dataUrl = canvas.toDataURL('image/png');
-    sendToOpener({ type: 'asport-review-signature-confirm', dataUrl: dataUrl }).then(function(){
+    var roleEl = document.querySelector('input[name="sigRole"]:checked');
+    sendToOpener({ type: 'asport-review-signature-confirm', dataUrl: dataUrl, role: roleEl ? roleEl.value : 'self' }).then(function(){
       setConfirmed(true, 'digital');
     });
   });
@@ -5157,6 +5195,9 @@ function buildConfirmReviewHtml_(data){
   }
 
   var initData = window.__reviewData || {};
+  var jv = document.getElementById('jusetsuViewBtn');
+  if (jv) jv.addEventListener('click', function(){ sendToOpener({ type: 'asport-review-generate', which: 'jusetsu' }); });
+  if (initData.sigRole === 'family'){ var fr = document.querySelector('input[name="sigRole"][value="family"]'); if (fr) fr.checked = true; }
   if (initData.signatureDataUrl){
     var img = new Image();
     img.onload = function(){
@@ -5407,7 +5448,12 @@ function generateReceipt(){
 // ============================================================
 // 支払い方法：受領委任払い（従来）／償還払い。償還払いは申請書の様式・請求書・領収証の金額（全額）が変わる
 function isShokan(){ return g('payMethod') === 'shokan' && !isGeneralSale(); }
-function applyPayMethodUI_(){ document.body.classList.toggle('pay-shokan', g('payMethod') === 'shokan'); }
+function applyPayMethodUI_(){
+  const on = g('payMethod') === 'shokan'; document.body.classList.toggle('pay-shokan', on); const el = document.getElementById('payMethod'); if (el) el.classList.toggle('is-shokan', on);
+  // 受領委任払いに戻したときは、償還払いの値引きを外して定価に戻す
+  if (!on && Number(g('shkPct')) > 0){ document.getElementById('shkPct').value = ''; for (let n = 1; n <= visibleItemCount; n++){ if (g(`i${n}n`) && gsListOf_(n)){ gsSyncing_ = true; document.getElementById(`i${n}p`).value = gsListOf_(n); gsSyncing_ = false; } } }
+  if (typeof renderShokanDiscBox_ === 'function') renderShokanDiscBox_();
+}
 function toggleSeihoFields(){
   const on = g('burdenRatio') === 'seiho';
   if (on && document.getElementById('payMethod')) document.getElementById('payMethod').value = 'shokan';   // 生活保護は償還払い
@@ -5452,7 +5498,33 @@ function gsListOf_(n){
   if (d.listPrice == null || d.listPrice === '' || isNaN(Number(d.listPrice))) { const p = gi(`i${n}p`); if (p > 0) d.listPrice = p; }
   return Number(d.listPrice) || 0;
 }
+// 償還払いの値引き：定価（品目を選んだときの金額）から％引きし、指定の単位未満を切り捨てる
+function shokanDiscPrice_(list){
+  const pct = Math.max(0, Math.min(Number(g('shkPct')) || 0, 100)), unit = Number(g('shkRound')) || 1;
+  if (!pct) return list;
+  return Math.floor(list * (100 - pct) / 100 / unit) * unit;
+}
+function applyShokanDiscount_(){
+  for (let n = 1; n <= visibleItemCount; n++){
+    if (!g(`i${n}n`)) continue;
+    const list = gsListOf_(n); if (!list) continue;
+    gsSyncing_ = true; document.getElementById(`i${n}p`).value = shokanDiscPrice_(list); gsSyncing_ = false;
+  }
+  renderShokanDiscBox_();
+}
+function renderShokanDiscBox_(){
+  const el = document.getElementById('shkRows'); if (!el) return;
+  if (g('payMethod') !== 'shokan'){ el.innerHTML = ''; return; }
+  const pct = Number(g('shkPct')) || 0; let h = '', sumL = 0, sumP = 0;
+  for (let n = 1; n <= visibleItemCount; n++){
+    const name = g(`i${n}n`); if (!name) continue;
+    const list = gsListOf_(n), price = gi(`i${n}p`); sumL += list; sumP += price;
+    h += `<div style="border-top:1px dashed #f5c26b;padding:4px 0;">品目${n}：${xmlEscape(appFormItemName_(name))}　定価 ${yen_(list)} → <b style="font-size:15px;">${yen_(price)}</b>${list > price ? `（${yen_(list - price)}引き）` : ''}</div>`;
+  }
+  el.innerHTML = h ? h + (pct ? `<div style="font-weight:700;margin-top:4px;">合計：${yen_(sumL)} → ${yen_(sumP)}（${pct}％引き・${(document.getElementById('shkRound').selectedOptions[0] || {}).text || ''}）</div>` : '') : '<div class="note">品目を選ぶと、ここに値引き後の金額が出ます。</div>';
+}
 function renderGeneralSaleBox(){
+  renderShokanDiscBox_();
   const box = document.getElementById('gsBox');
   if (!box) return;
   if (!isGeneralSale()){ box.style.display = 'none'; return; }
@@ -5560,6 +5632,10 @@ function generateJusetsu(){
   const [y, m, d] = ds.split('/').map(v => parseInt(v, 10));
   const staff = getDStaffValue() || '';
   const rep = (g('dRep') || '代表取締役 佐々木浩').replace(/\s+/g, '　').replace(/佐々木浩/, '佐々木　浩');
+  // 確認ページで電子サインをもらっていれば、同意欄に入れる（ご本人→利用者の欄、ご家族・代理人→家族代表の欄）
+  const sig = (typeof reviewSignatureDataUrl === 'string') ? reviewSignatureDataUrl : '';
+  const sigTop = (g('sigRole') === 'family') ? 154 : 140;
+  const sigImg = sig ? `<img src="${sig}" alt="サイン" style="position:absolute;left:106mm;top:${sigTop}mm;height:13mm;width:auto;max-width:76mm;object-fit:contain">` : '';
   const imgs = JUSETSU_PAGES_B64.map((b, i) => `<div class="pg"><img src="data:image/png;base64,${b}" alt="重要事項説明書 ${i+1}ページ"></div>`).join('');
   const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>重要事項説明書_${xmlEscape(g('name') || '')}</title>
 <style>
@@ -5588,6 +5664,7 @@ ${imgs}
   <div class="r" style="top:94mm;left:70mm">説明者・氏　名</div><div class="v" style="top:93mm;left:111mm">${xmlEscape(staff)}</div>
   <div class="t" style="top:110mm">私は、事業者より上記の重要事項について説明を受けました。<br>この重要事項説明書の内容に同意し、交付を受けてサービス提供契約を締結することとします。<br>また９（１）に記載の個人情報の使用についても同意します。</div>
   <div class="r" style="top:136mm;left:37mm;font-size:11.5pt">${y || '20　　'}年　${m || '　　'}月　${d || '　　'}日</div>
+  ${sigImg}
   <div class="r" style="top:151mm;left:44mm;letter-spacing:.5em">利用者</div><div class="r" style="top:151mm;left:78mm">氏　　名</div><div class="ln" style="top:146mm"></div>
   <div class="r" style="top:165mm;left:44mm">利用者家族代表</div><div class="r" style="top:165mm;left:78mm">氏　　名</div><div class="ln" style="top:160mm"></div>
   <div class="r" style="top:182mm;left:44mm">署名代行者（又は法定代理人）</div>
@@ -6017,7 +6094,9 @@ markFormSynced();
       if (fn === 'clearForm' && pm && !g('name')){ pm.value = 'juryo'; { const nc = document.getElementById('newCustomer'); if (nc) nc.value = ''; } ['bkType','yuType'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; }); }
       applyPayMethodUI_();
       [1, 2, 3].forEach(k => { reset(k); renderVariantBox_(k); }); return r; }; });
+  { const pm = document.getElementById('payMethod'); if (pm && g('burdenRatio') !== 'seiho') pm.value = 'juryo'; }   // 立ち上がりは必ず受領委任払い（ブラウザが前回の選択を復元することがあるため）
   applyPayMethodUI_();
+  window.addEventListener('pageshow', () => { const pm = document.getElementById('payMethod'); if (pm && !currentCaseId && g('burdenRatio') !== 'seiho'){ pm.value = 'juryo'; applyPayMethodUI_(); } });
   const os = window.setSharedMaster_; window.setSharedMaster_ = function(){ const r = os.apply(this, arguments); [1, 2, 3].forEach(renderVariantBox_); return r; };
 })();
 </script>
