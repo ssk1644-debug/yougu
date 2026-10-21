@@ -202,7 +202,7 @@ body.gs-mode .preset-cards{display:none!important;}
     <div>
       <h1><span class="ins-only">介護保険 福祉用具購入費支給申請書</span><span class="gs-only">一般販売（納品・請求書／領収証）</span></h1>
       <p><span class="ins-only"><span class="pm-juryo">受領委任払い用</span><span class="pm-shokan" style="background:#f59e0b;color:#fff;border-radius:4px;padding:0 6px;font-weight:700">償還払い用</span> ／ 自動入力フォーム（福山市）</span><span class="gs-only">介護保険を使わない販売 ／ 値引き・送料・粗利</span></p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-21-3　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-22-1　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -965,7 +965,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-10-21-3";
+const APP_VERSION = "2026-10-22-1";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -1533,7 +1533,7 @@ function serializeFormState(){
   // ・カタログ検索選択品目（catalogSourceあり）→ catalogPagesだけ除外し、読込時に
   //   CATALOG_PAGESから引き直す（画像本体を含まないadapted構造のためこちらは従来通り軽量）
   const selectedItemDataSaved = {};
-  [1,2,3].forEach(n => {
+  ITEM_NS.forEach(n => {
     const d = selectedItemData[n];
     if (!d) return;
     if (d.presetGroupKey){
@@ -1597,12 +1597,12 @@ function loadCaseIntoForm(rec){
   // 読み込み前に画面上で品目ブロックを追加操作していた場合、読み込む案件の品目数より
   // 多く表示されたままにならないよう、余分なブロックは削除ボタン相当の処理で畳んでおく
   while (visibleItemCount > wantCount) removeItemBlock(visibleItemCount);
-  while (visibleItemCount < wantCount) addNextItemBlock();
+  while (visibleItemCount < wantCount) addNextItemBlock(true);
   Object.entries(data.values || {}).forEach(([id, val]) => {
     const el = document.getElementById(id);
     if (el && el.type !== "file" && el.type !== "checkbox") el.value = val;
   });
-  for (let n = 1; n <= 3; n++){
+  for (let n = 1; n <= MAX_ITEMS; n++){
     restoreItemReasonState(n, (data.itemReasonState || [])[n-1]);
   }
   // パンフレット出力用のselectedItemData（写真・カタログ切り抜き情報）を復元する。
@@ -1610,7 +1610,7 @@ function loadCaseIntoForm(rec){
   // （前の案件・前の選択操作による）写真データがそのまま居座ってしまい、
   // 「商品写真が違う」「選択していない商品の写真も出る」といった不具合の原因になる
   selectedItemData = {};
-  for (let n = 1; n <= 3; n++){
+  for (let n = 1; n <= MAX_ITEMS; n++){
     document.querySelectorAll(`#pcards${n} .pcard`).forEach(c => c.classList.remove('selected'));
     const preview = document.getElementById(`presetPreview${n}`);
     if (preview){ preview.classList.remove('show'); preview.innerHTML = ''; }
@@ -2009,7 +2009,10 @@ function addSuggestedKeyword(el){
 // ============================================================
 // 各品目の状態管理
 // ============================================================
-const itemState = [1,2,3].map(n => ({
+// 品目の数：介護保険の申請は3品目まで（申請書の様式が3品目）。一般販売は10品目まで（請求書は5品目ごとに1枚）
+const MAX_ITEMS = 10, INS_MAX_ITEMS = 3;
+const ITEM_NS = Array.from({length: MAX_ITEMS}, (_, i) => i + 1);
+const itemState = ITEM_NS.map(n => ({
   n,
   selectedTags: new Set(),
   customPhrases: [],
@@ -2021,7 +2024,7 @@ const itemState = [1,2,3].map(n => ({
 // ============================================================
 function buildItems() {
   const container = document.getElementById('items');
-  [1,2,3].forEach(n => {
+  ITEM_NS.forEach(n => {
     const opt = n > 1;
     const div = document.createElement('div');
     div.className = 'ib';
@@ -2132,7 +2135,7 @@ function buildItems() {
     <div id="shkRows" style="margin-top:8px;font-size:13px;"></div>
     <div class="note">※値引き後の金額が、申請書・請求書・領収証の購入金額になります（値引きの額は書類には載りません）。</div>`;
   gs.parentNode.insertBefore(sk, gs.nextSibling);
-  [1,2,3].forEach(n => { const p = document.getElementById(`i${n}p`); if (p) p.addEventListener('input', () => { if (!gsSyncing_) renderGeneralSaleBox(); }); });
+  ITEM_NS.forEach(n => { const p = document.getElementById(`i${n}p`); if (p) p.addEventListener('input', () => { if (!gsSyncing_) renderGeneralSaleBox(); }); });
 }
 
 let visibleItemCount = 1;
@@ -2141,17 +2144,20 @@ let visibleItemCount = 1;
 let selectedItemData = {};
 function updateDeleteButtons(){
   setTimeout(renderGeneralSaleBox, 0);
-  [2,3].forEach(n => {
+  ITEM_NS.slice(1).forEach(n => {
     const btn = document.getElementById(`delBtn${n}`);
     if (btn) btn.style.display = (n === visibleItemCount) ? '' : 'none';
   });
 }
-function addNextItemBlock(){
-  if (visibleItemCount >= 3) return;
+function itemLimit_(){ return (typeof isGeneralSale === 'function' && isGeneralSale()) ? MAX_ITEMS : INS_MAX_ITEMS; }
+function updateAddItemBtn_(){ const b = document.getElementById('addItemBtn'); if (!b) return; b.style.display = visibleItemCount >= itemLimit_() ? 'none' : '';
+  b.textContent = isGeneralSale() ? `＋ 品目を追加（一般販売は${MAX_ITEMS}品目まで。5品目を超えると請求書は2枚目に続きます）` : '＋ 品目を追加（同時に複数の福祉用具を購入する場合のみ）'; }
+function addNextItemBlock(force){
+  if (visibleItemCount >= (force ? MAX_ITEMS : itemLimit_())) return;
   visibleItemCount++;
   document.getElementById(`block${visibleItemCount}`).style.display = '';
   setTodayOnItemDate(visibleItemCount);
-  if (visibleItemCount >= 3) document.getElementById('addItemBtn').style.display = 'none';
+  updateAddItemBtn_();
   updateDeleteButtons();
 }
 function removeItemBlock(n){
@@ -2174,7 +2180,7 @@ function removeItemBlock(n){
   document.getElementById(`block${n}`).style.display = 'none';
   delete selectedItemData[n];
   visibleItemCount = n - 1;
-  document.getElementById('addItemBtn').style.display = '';
+  updateAddItemBtn_();
   updateDeleteButtons();
 }
 
@@ -3070,14 +3076,13 @@ function clearForm(){
   document.getElementById('dBiz').value = '株式会社アスポート';
   document.getElementById('dRep').value = '代表取締役 佐々木浩';
   document.getElementById('dPhone').value = '084-971-8882';
-  [1,2,3].forEach(n => {
+  ITEM_NS.forEach(n => {
     document.getElementById(`i${n}sl`).value = '株式会社アスポート';
     document.getElementById(`i${n}bn`).value = '3471500771';
     setTodayOnItemDate(n);
   });
-  // 品目2・3を再び非表示に戻す
-  document.getElementById('block2').style.display = 'none';
-  document.getElementById('block3').style.display = 'none';
+  // 品目2以降を再び非表示に戻す
+  ITEM_NS.slice(1).forEach(n => { document.getElementById(`block${n}`).style.display = 'none'; });
   selectedItemData = {};
   visibleItemCount = 1;
   document.getElementById('addItemBtn').style.display = '';
@@ -3089,7 +3094,7 @@ function clearForm(){
   document.getElementById('docReview').style.display = 'none';
   document.getElementById('docReview').innerHTML = '';
   document.getElementById('docReadBtn').disabled = true;
-  [1,2,3].forEach(n => {
+  ITEM_NS.forEach(n => {
     document.getElementById(`presetPreview${n}`).classList.remove('show');
     document.getElementById(`presetPreview${n}`).innerHTML = '';
     itemState[n-1].selectedTags.clear();
@@ -4607,6 +4612,33 @@ function invoiceStaffLabel(fullName){
   return INVOICE_STAFF_LABELS[fullName] || fullName || '';
 }
 
+// 請求書のxlsxに2枚目以降のシートを足す（ロゴの画像もそのシート用に複製する）
+async function addInvoiceSheets_(zip, xmls){
+  const rd = async p => zip.file(p) ? zip.file(p).async('string') : null;
+  let wb = await rd('xl/workbook.xml'), rels = await rd('xl/_rels/workbook.xml.rels'), ct = await rd('[Content_Types].xml');
+  const srels = await rd('xl/worksheets/_rels/sheet1.xml.rels'), drw = await rd('xl/drawings/drawing1.xml'), drwRels = await rd('xl/drawings/_rels/drawing1.xml.rels');
+  const pa = (wb.match(/<definedName name="_xlnm\.Print_Area" localSheetId="0">([^<]+)<\/definedName>/) || [])[1];
+  xmls.forEach((x, i) => {
+    const k = i + 2, rid = `rIdPg${k}`, nm = `${k}枚目`;
+    zip.file(`xl/worksheets/sheet${k}.xml`, x.replace(/\stabSelected="1"/, ''));
+    ct = ct.replace('</Types>', `<Override PartName="/xl/worksheets/sheet${k}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`);
+    if (srels){
+      let r2 = srels;
+      if (drw && /drawing1\.xml/.test(srels)){
+        r2 = srels.replace(/drawing1\.xml/g, `drawing${k}.xml`);
+        zip.file(`xl/drawings/drawing${k}.xml`, drw);
+        if (drwRels) zip.file(`xl/drawings/_rels/drawing${k}.xml.rels`, drwRels);
+        ct = ct.replace('</Types>', `<Override PartName="/xl/drawings/drawing${k}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`);
+      }
+      zip.file(`xl/worksheets/_rels/sheet${k}.xml.rels`, r2);
+    }
+    rels = rels.replace('</Relationships>', `<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="/xl/worksheets/sheet${k}.xml" Id="${rid}"/></Relationships>`);
+    wb = wb.replace('</sheets>', `<sheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" name="${nm}" sheetId="${100 + k}" state="visible" r:id="${rid}"/></sheets>`);
+    if (pa) wb = wb.replace('</definedNames>', `<definedName name="_xlnm.Print_Area" localSheetId="${k - 1}">'${nm}'!${pa.split('!').pop()}</definedName></definedNames>`);
+  });
+  wb = wb.replace(/\sfirstSheet="\d+"/, ' firstSheet="0"');
+  zip.file('xl/workbook.xml', wb); zip.file('xl/_rels/workbook.xml.rels', rels); zip.file('[Content_Types].xml', ct);
+}
 async function generateInvoice(){
   const items = collectInvoiceItems(true);
   if (!items.length){ toast('⚠ 品目が選択されていません。先に福祉用具を選択してください', false); return; }
@@ -4632,7 +4664,14 @@ async function generateInvoice(){
     const sheetPath = 'xl/worksheets/sheet1.xml';
     const sheetFile = zip.file(sheetPath);
     if (!sheetFile) throw new Error('請求書様式ファイルの読み込みに失敗しました');
-    let xml = await sheetFile.async('string');
+    const baseXml = await sheetFile.async('string');
+    // 5品目を超えるときは、5品目ごとに1枚（シート）ずつ作る。合計・お支払い合計はどの枚も全品目の金額
+    const pages = []; for (let i = 0; i < items.length; i += 5) pages.push(items.slice(i, i + 5));
+    const grandTotal = items.reduce((a, it) => a + (Number(it.price) || 0), 0);
+    const pageXmls = [];
+    for (let pi = 0; pi < pages.length; pi++){
+    const pageItems = pages[pi];
+    let xml = baseXml;
     const set = (ref,val) => { xml = setCellInXml(xml, ref, val); };
     const setNum = (ref,val) => { xml = setCellNumInXml(xml, ref, val); };
     const clear = (ref) => { xml = clearCellInXml(xml, ref); };
@@ -4694,14 +4733,14 @@ async function generateInvoice(){
     }
 
     const invStyle = [];
-    const lays = items.slice(0,5).map(it => invoiceNameLayout_(appFormItemName_(it.name)));   // 「シャワーチェア」は付けない。長い品名は2行に
+    const lays = pageItems.map(it => invoiceNameLayout_(appFormItemName_(it.name)));   // 「シャワーチェア」は付けない。長い品名は2行に
     const makerToNote = lays.some(l => l.l2);   // 2行の品名が1つでもあれば、メーカー名はそろえて全部備考欄へ
-    items.slice(0,5).forEach((it,idx) => {
+    pageItems.forEach((it,idx) => {
       const r1 = rows1[idx];
       const r2 = rows2[idx];
       // 日付欄：1件目は実際の購入日（月/日）、2件目以降は「〃」（同上）
       let dateVal = '';
-      if (idx === 0) {
+      if (idx === 0 && pi === 0) {
         const [,dm,dd] = (it.dateStr || '').split('/');
         if (dm && dd) dateVal = `${parseInt(dm,10)}/${parseInt(dd,10)}`;
       } else {
@@ -4724,6 +4763,12 @@ async function generateInvoice(){
       });
     });
 
+    if (pages.length > 1){
+      // 何枚目か（1/2など）と、合計は全品目の金額であることを書く。T23（10％対象合計）を全品目の合計にすると、総合計・消費税・お支払い合計も式で全体の金額になる
+      setNum('T23', grandTotal);
+      const note = `【${pi+1}／${pages.length}枚目】` + (pi < pages.length - 1 ? `明細は${pi+2}枚目に続きます（合計は全${items.length}品目の金額です）` : `全${items.length}品目・${pages.length}枚の合計です`);
+      set('B24', note); set('B53', note);
+    }
     // 明細テーブルの罫線の不揃い（二重線で太く見える／横線が欠ける）を整える
     // 結合セル内部に実体を持たないセルを基準行からコピーして補完(罫線欠落の根本対策)
     xml = fillMissingItemRowCells_(xml);
@@ -4737,8 +4782,11 @@ async function generateInvoice(){
     xml = mirrorInvoiceCopy2Borders_(xml);
     // 品名の文字の大きさ（罫線を整えた後に、その書式を元にして大きさだけ変える）
     xml = await styleCellsInSheet_(zip, xml, invStyle);
+    pageXmls.push(xml);
+    }   // ← 1枚ごとの繰り返しここまで
 
-    zip.file(sheetPath, xml);
+    zip.file(sheetPath, pageXmls[0]);
+    if (pageXmls.length > 1) await addInvoiceSheets_(zip, pageXmls.slice(1));
     const blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const url = URL.createObjectURL(blob);
     const ymd = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
@@ -5371,7 +5419,9 @@ function generateReceipt(){
   const dPhone = g('dPhone'), dAddr = g('dAddr');
   const receiptNo = g('receiptNo');
 
-  const desc = items.map(it => xmlEscape(appFormItemName_(it.name) || '福祉用具')).join('・');
+  const descNames = items.filter(it => it.n !== 'ship').map(it => appFormItemName_(it.name) || '福祉用具');
+  // 品目が多いときは但し書きを1行に収める（領収証の高さ＝切り取り線の位置を変えないため）
+  const desc = xmlEscape(descNames.length > 2 && descNames.join('・').length > 34 ? `${descNames.slice(0, 2).join('・')} ほか${descNames.length - 2}点` : descNames.join('・'));
 
   // 金額を千万～一の位の枠に割り当てる（先頭のゼロは空欄にする）
   const labels = ['千万','百万','十万','万','千','百','十','一'];
@@ -5588,6 +5638,8 @@ function setSaleMode(mode){
 }
 function applySaleModeUI_(){
   const gs = isGeneralSale();
+  if (typeof updateAddItemBtn_ === 'function') updateAddItemBtn_();
+  if (!gs && visibleItemCount > INS_MAX_ITEMS) toast(`⚠ 介護保険の申請は${INS_MAX_ITEMS}品目までです。4品目以降は申請書などに出ません`, false);
   if (typeof setCaseKind_ === 'function' && ((caseKind_ === 'gs') !== gs)) setCaseKind_(gs ? 'gs' : 'ins');
   document.body.classList.toggle('gs-mode', gs);
   const a = document.getElementById('modeIns'), b = document.getElementById('modeGs');
@@ -6170,7 +6222,7 @@ function updateReviewSignatureStatusUI(){
 // 初期化
 // ============================================================
 buildItems();
-[1,2,3].forEach(setTodayOnItemDate);
+ITEM_NS.forEach(setTodayOnItemDate);
 loadApiKeyUI();
 loadGasUrlUI();
 loadZaikoUI();
@@ -6209,11 +6261,11 @@ markFormSynced();
       if (fn === 'loadCaseIntoForm' && pm){ const v = (arguments[0] && arguments[0].formData && arguments[0].formData.values) || {}; if (!v.payMethod && g('burdenRatio') === 'seiho') pm.value = 'shokan'; }
       if (fn === 'clearForm' && pm && !g('name')){ pm.value = 'juryo'; { const nc = document.getElementById('newCustomer'); if (nc) nc.value = ''; } ['bkType','yuType'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; }); }
       applyPayMethodUI_();
-      [1, 2, 3].forEach(k => { reset(k); renderVariantBox_(k); }); return r; }; });
+      ITEM_NS.forEach(k => { reset(k); renderVariantBox_(k); }); updateAddItemBtn_(); return r; }; });
   { const pm = document.getElementById('payMethod'); if (pm && g('burdenRatio') !== 'seiho') pm.value = 'juryo'; }   // 立ち上がりは必ず受領委任払い（ブラウザが前回の選択を復元することがあるため）
   applyPayMethodUI_();
   window.addEventListener('pageshow', () => { const pm = document.getElementById('payMethod'); if (pm && !currentCaseId && g('burdenRatio') !== 'seiho'){ pm.value = 'juryo'; applyPayMethodUI_(); } });
-  const os = window.setSharedMaster_; window.setSharedMaster_ = function(){ const r = os.apply(this, arguments); [1, 2, 3].forEach(renderVariantBox_); return r; };
+  const os = window.setSharedMaster_; window.setSharedMaster_ = function(){ const r = os.apply(this, arguments); ITEM_NS.forEach(renderVariantBox_); return r; };
 })();
 </script>
 </body>
