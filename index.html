@@ -120,6 +120,17 @@ body.casekind-gs .case-tbl th:nth-child(6), body.casekind-gs .case-tbl td:nth-ch
 .jan-reg input{padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;min-width:120px;flex:1}
 .jan-reg button{padding:6px 10px;border:1px solid #0369a1;border-radius:6px;background:#fff;color:#0369a1;cursor:pointer;font-size:13px}
 .jan-reg button.p{background:#0369a1;color:#fff}
+.cs-row{display:flex;gap:6px;align-items:stretch}
+.cs-row input{flex:1;min-width:0}
+.cs-x{flex:none;width:44px;border:1px solid var(--border);border-radius:8px;background:#fff;font-size:20px;line-height:1;color:#64748b;cursor:pointer}
+.cs-go{flex:none;padding:0 14px;border:0;border-radius:8px;background:#1e3a8a;color:#fff;font-weight:700;cursor:pointer;white-space:nowrap}
+.item-reset-btn{padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;color:#475569;font-size:12px;cursor:pointer}
+.jan-pending{margin-top:8px;padding:6px 10px;border:1px dashed #d97706;border-radius:8px;background:#fffbeb;font-size:12px;color:#92400e;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.jan-pending button{padding:3px 10px;border:1px solid #d97706;border-radius:6px;background:#fff;color:#b45309;cursor:pointer;font-size:12px}
+body .actions{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;justify-content:safe center;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));gap:6px}
+body .actions .btn,body .actions .pay-tag{flex:none;white-space:nowrap}
+@media(max-width:1180px){body .actions{justify-content:flex-start}body .actions .btn{padding:8px 12px;font-size:13px;letter-spacing:0}}
+@media(max-width:640px){body .actions .btn{padding:7px 10px;font-size:12px}}
 .preset-preview{display:none;margin-top:10px;padding:10px 12px;background:#fff;border:1px solid var(--border);border-radius:8px;align-items:center;gap:12px;}
 .preset-preview.show{display:flex;}
 .preset-preview img{width:80px;height:80px;object-fit:contain;background:#fafafa;border-radius:6px;border:1px solid var(--border-light);flex-shrink:0;}
@@ -202,7 +213,7 @@ body.gs-mode .preset-cards{display:none!important;}
     <div>
       <h1><span class="ins-only">介護保険 福祉用具購入費支給申請書</span><span class="gs-only">一般販売（納品・請求書／領収証）</span></h1>
       <p><span class="ins-only"><span class="pm-juryo">受領委任払い用</span><span class="pm-shokan" style="background:#f59e0b;color:#fff;border-radius:4px;padding:0 6px;font-weight:700">償還払い用</span> ／ 自動入力フォーム（福山市）</span><span class="gs-only">介護保険を使わない販売 ／ 値引き・送料・粗利</span></p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-22-2　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-10-22-3　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -965,7 +976,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-10-22-2";
+const APP_VERSION = "2026-10-22-3";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -2041,9 +2052,9 @@ function buildItems() {
 
         <!-- プリセット選択 -->
         <div class="preset-section">
-          <div class="preset-label">⚡ 商品を選択して自動入力</div>
+          <div class="preset-label" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">⚡ 商品を選択して自動入力<span style="flex:1"></span><button type="button" class="item-reset-btn" onclick="clearItem_(${n})" title="この品目の商品・金額を空にして選び直す">↺ この品目を空にして選び直す</button></div>
           <div class="catalog-search">
-            <input type="text" id="catalogSearch${n}" placeholder="🔍 品番・商品名・JANで検索（バーコードを読んでもOK）" autocomplete="off" oninput="onCatalogSearch(${n})" onfocus="onCatalogSearch(${n})" onkeydown="onCatalogSearchKey(event, ${n})">
+            <div class="cs-row"><input type="text" id="catalogSearch${n}" placeholder="🔍 品番・商品名・JANで検索（バーコードを読んでもOK）" autocomplete="off" oninput="onCatalogSearchInput_(${n})" onfocus="this.select();onCatalogSearch(${n})" onkeydown="onCatalogSearchKey(event, ${n})"><button type="button" class="cs-x" title="検索欄を空にする" onclick="clearCatalogSearch_(${n})">×</button><button type="button" class="cs-go" onclick="readCatalogSearch_(${n})">読み込む</button></div>
             <div class="catalog-results" id="catalogResults${n}"></div>
           </div>
           <div class="preset-cards" id="pcards${n}"></div>
@@ -2331,13 +2342,60 @@ function onCatalogSearch(n) {
 }
 function pickCatalogHit_(n, h){
   if (!h) return;
-  if (h.kind === 'cat') { selectCatalogItem(n, h.item); if (h.m) attachSharedInfo_(n, h.m); }
+  // 品番（色・高さ）まで1つに決まっているとき（バーコード・品番が1つだけ）は、商品名も色・高さ入りの名前にする
+  if (h.kind === 'cat') { selectCatalogItem(n, h.item); if (h.m) chooseVariant_(n, encodeURIComponent(h.m.key)); }
   else selectSharedItem(n, h.m);
+}
+// JANのチェックディジット確認（読み取りの続きがくっついた数字の中から、正しいJANだけを取り出すため）
+function janOk_(d){ if (!/^(\d{8}|\d{13})$/.test(d)) return false; const a = d.split('').map(Number), c = a.pop(); let sum = 0; a.reverse().forEach((v, i) => { sum += v * (i % 2 === 0 ? 3 : 1); }); return (10 - sum % 10) % 10 === c; }
+// 検索欄の文字の最後が「前の残り＋バーコード」になっていたら、最後のJANだけにする（読み取り失敗のあとに数字が足されていく不具合の対策）
+function normalizeScan_(n){
+  const el = document.getElementById(`catalogSearch${n}`); if (!el) return '';
+  const raw = el.value.normalize('NFKC').trim(), m = raw.match(/(\d{8,})$/);
+  if (m && raw.length > 13){ const d = m[1], t13 = d.slice(-13), t8 = d.slice(-8);
+    const jan = janOk_(t13) ? t13 : janOk_(t8) ? t8 : ''; if (jan && jan !== raw){ el.value = jan; return jan; } }
+  return raw;
+}
+let _csT = {};
+function onCatalogSearchInput_(n){
+  onCatalogSearch(n);
+  // Enterを送らないバーコードリーダーでも、JANが1つそろった時点で自動で選ぶ
+  clearTimeout(_csT[n]); _csT[n] = setTimeout(() => { const v = normalizeScan_(n); if (janOk_(v)) readCatalogSearch_(n); }, 350);
+}
+function clearCatalogSearch_(n){
+  const el = document.getElementById(`catalogSearch${n}`); if (el){ el.value = ''; el.focus(); }
+  const box = document.getElementById(`catalogResults${n}`); if (box){ box.classList.remove('show'); box.innerHTML = ''; }
+  catalogSearchHits[n] = [];
+  const jr = document.getElementById(`janReg${n}`); if (jr && !jr.classList.contains('jan-pending')) jr.style.display = 'none';
+}
+// 「読み込む」ボタン／Enter：検索して1件目を選ぶ。終わったら検索欄は空にする（次のバーコードがくっつかないように）
+function readCatalogSearch_(n){
+  clearTimeout(_csT[n]);
+  const el = document.getElementById(`catalogSearch${n}`); if (!el) return;
+  const v = normalizeScan_(n); if (!v) return;
+  onCatalogSearch(n);
+  const hits = catalogSearchHits[n] || [];
+  if (hits.length){ pickCatalogHit_(n, hits[0]); el.value = ''; }
+  else if (janOk_(v)){ el.value = ''; const box = document.getElementById(`catalogResults${n}`); if (box){ box.classList.remove('show'); } }
+  else el.select();
+}
+// この品目を空にして選び直す（品目欄は残す）
+function clearItem_(n){
+  ['t','n','mk','p'].forEach(suf => { const el = document.getElementById(`i${n}${suf}`); if (el) el.value = ''; });
+  delete selectedItemData[n];
+  document.querySelectorAll(`#pcards${n} .pcard`).forEach(c => c.classList.remove('selected'));
+  const pv = document.getElementById(`presetPreview${n}`); if (pv){ pv.classList.remove('show'); pv.innerHTML = ''; }
+  const jr = document.getElementById(`janReg${n}`); if (jr){ jr.style.display = 'none'; jr.className = 'jan-reg'; }
+  const vb = document.getElementById(`variant${n}`); if (vb){ vb.dataset.open = ''; vb.dataset.q = ''; }
+  clearCatalogSearch_(n);
+  renderVariantBox_(n); renderGeneralSaleBox();
+  toast(`品目${n}を空にしました。商品を選び直してください`);
 }
 function onCatalogSearchKey(e, n){
   if (e.key !== 'Enter') return;
   e.preventDefault();
-  onCatalogSearch(n);
+  readCatalogSearch_(n);
+  return;
   const hits = catalogSearchHits[n] || [];
   if (hits.length) pickCatalogHit_(n, hits[0]);
 }
@@ -2380,7 +2438,7 @@ function variantListHtml_(n){
 function renderVariantBox_(n){
   const box = document.getElementById(`variant${n}`); if (!box) return;
   const d = selectedItemData[n];
-  if (!d || !SHARED_MASTER.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  if (!d || !SHARED_MASTER.length || (d.janPending && !d.catalogCode && !d.presetGroupKey && !d.masterKey)){ box.style.display = 'none'; box.innerHTML = ''; return; }
   const cur = variantCurrent_(n), open = !cur || box.dataset.open === '1';
   box.style.display = '';
   box.innerHTML = (cur
@@ -2419,12 +2477,26 @@ function showJanRegister_(n, jan){
   const b = janRegBox_(n); if (!b) return;
   if (!getZaikoUrl()){ b.style.display = ''; b.innerHTML = `📷 JAN <b>${xmlEscape(jan)}</b> は共通商品マスターにありません。登録するには⚙設定で在庫システムのURLと合言葉を入れてください。<div class="row"><button type="button" onclick="this.closest('.jan-reg').style.display='none'">閉じる</button></div>`; return; }
   const cur = variantCurrent_(n), name = g(`i${n}n`), d = selectedItemData[n] || {};
-  b.dataset.jan = jan; b.style.display = ''; janPhotos_[n] = [];
+  b.className = 'jan-reg'; b.dataset.jan = jan; b.style.display = ''; janPhotos_[n] = [];
   b.innerHTML = `📷 JAN <b>${xmlEscape(jan)}</b> は共通商品マスターにありません。登録すると、次からバーコードで出ます（在庫システムにも入ります）。
     ${cur && !cur.jan ? `<div class="row"><button type="button" class="p" onclick="registerJan_(${n}, 'bind')">✅ 選んでいる品番「${xmlEscape(cur.name)}」のJANにする</button></div>` : ''}
     <div class="row"><input id="janRegName${n}" placeholder="商品名（色・高さまで）" value="${xmlEscape(name || '')}"><input id="janRegMaker${n}" placeholder="メーカー" value="${xmlEscape(g(`i${n}mk`) || d.maker || '')}" style="max-width:180px"><input id="janRegModel${n}" placeholder="メーカー品番（任意）" value="${xmlEscape(d.model || '')}" style="max-width:160px"></div>
     <div class="row"><label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #0369a1;border-radius:6px;background:#fff;color:#0369a1;cursor:pointer;">📷 撮って読む<input type="file" accept="image/*" capture="environment" style="display:none" onchange="readJanPhoto_(${n}, this)"></label><label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #0369a1;border-radius:6px;background:#fff;color:#0369a1;cursor:pointer;">🖼 写真を選ぶ（複数OK）<input type="file" accept="image/*" multiple style="display:none" onchange="readJanPhoto_(${n}, this)"></label><span id="janRegMsg${n}" class="note">箱の正面・側面・ラベルなど、何枚でも足せます（最大4枚まとめて読みます）</span></div>
-    <div class="row"><button type="button" class="p" onclick="registerJan_(${n}, 'new')">＋ この商品名でJANを登録して、品目${n}に入れる</button><button type="button" onclick="this.closest('.jan-reg').style.display='none'">閉じる</button></div>`;
+    <div class="row"><button type="button" class="p" onclick="registerJan_(${n}, 'new')">＋ この商品名でJANを登録して、品目${n}に入れる</button><button type="button" onclick="skipJanRegister_(${n})">✍ 登録しないで手入力で続ける（あとで登録）</button></div>`;
+}
+// 登録しないでそのまま入力を続ける：JANは品目に控えておき（案件と一緒に保存される）、あとでPCなどから登録できる
+function skipJanRegister_(n){
+  const b = janRegBox_(n), jan = b && b.dataset.jan; if (!jan) return;
+  selectedItemData[n] = { jan, janPending: true };   // 手入力の新しい商品として扱う（前に選んでいた商品の情報は外す）
+  renderVariantBox_(n); showJanPending_(n);
+  const nm = document.getElementById(`i${n}n`); if (nm){ nm.focus(); nm.scrollIntoView({block:'center', behavior:'smooth'}); }
+  toast('商品名・金額を手で入れて続けてください（JANは控えてあります。あとで登録できます）');
+}
+function showJanPending_(n){
+  const d = selectedItemData[n], b = janRegBox_(n); if (!b) return;
+  if (!d || !d.janPending || !d.jan || sharedByJan.has(String(d.jan))){ if (b.classList.contains('jan-pending')){ b.style.display = 'none'; b.className = 'jan-reg'; } return; }
+  b.dataset.jan = d.jan; b.className = 'jan-pending'; b.style.display = '';
+  b.innerHTML = `📷 JAN <b>${xmlEscape(d.jan)}</b> は未登録のまま入力中です。<button type="button" onclick="showJanRegister_(${n}, '${xmlEscape(d.jan)}')">今すぐ登録する</button>`;
 }
 // 箱やラベルの写真から、商品名・メーカー・品番（色・サイズ）をAIで読み取って登録欄に入れる（⚙のAPIキーを使う）
 // 写真は何回かに分けて足せる（正面＋ラベルなど）。足すたびに、それまでの写真（最新4枚）をまとめて読み直す
@@ -2478,7 +2550,8 @@ async function registerJan_(n, mode){
     if (!selectedItemData[n]){ selectSharedItem(n, slim); }
     else { document.getElementById(`i${n}n`).value = slim.name; if (slim.maker && !g(`i${n}mk`)) document.getElementById(`i${n}mk`).value = slim.maker; attachSharedInfo_(n, slim); }
   } else attachSharedInfo_(n, slim);
-  b.style.display = 'none';
+  if (selectedItemData[n]) delete selectedItemData[n].janPending;
+  b.style.display = 'none'; b.className = 'jan-reg';
   toast(`✅ JAN ${jan} を登録しました：${slim.name}`);
 }
 function selectSharedItem(n, m) {
@@ -2499,7 +2572,7 @@ function selectSharedItem(n, m) {
   showPresetPreview(n, adapted);
   updateReasonSuggestion(n, CATALOG_TYPE_TO_KEY[type] || '', adapted);
   const input = document.getElementById(`catalogSearch${n}`);
-  input.value = `${m.name}${m.jan ? '（JAN：'+m.jan+'）' : ''}`;
+  input.value = '';   // 選んだ商品は下の欄に出る。検索欄は空にして、次のバーコードがくっつかないようにする
   const box = document.getElementById(`catalogResults${n}`);
   box.classList.remove('show'); box.innerHTML = '';
   if (!type && !isGeneralSale()) toast('⚠ この商品は特定福祉用具の種目が登録されていません。介護保険の購入費の対象外なら④欄で「一般販売」を選んでください', false);
@@ -2525,7 +2598,7 @@ function selectCatalogItem(n, dbItem) {
   const key = CATALOG_TYPE_TO_KEY[dbItem.type] || '';
   updateReasonSuggestion(n, key, adapted);
   const input = document.getElementById(`catalogSearch${n}`);
-  input.value = `${dbItem.name}（品番：${dbItem.codes[0]}）`;
+  input.value = '';
   const box = document.getElementById(`catalogResults${n}`);
   box.classList.remove('show');
   box.innerHTML = '';
@@ -6263,7 +6336,7 @@ markFormSynced();
       if (fn === 'loadCaseIntoForm' && pm){ const v = (arguments[0] && arguments[0].formData && arguments[0].formData.values) || {}; if (!v.payMethod && g('burdenRatio') === 'seiho') pm.value = 'shokan'; }
       if (fn === 'clearForm' && pm && !g('name')){ pm.value = 'juryo'; { const nc = document.getElementById('newCustomer'); if (nc) nc.value = ''; } ['bkType','yuType'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; }); }
       applyPayMethodUI_();
-      ITEM_NS.forEach(k => { reset(k); renderVariantBox_(k); }); updateAddItemBtn_(); return r; }; });
+      ITEM_NS.forEach(k => { reset(k); renderVariantBox_(k); showJanPending_(k); }); updateAddItemBtn_(); return r; }; });
   { const pm = document.getElementById('payMethod'); if (pm && g('burdenRatio') !== 'seiho') pm.value = 'juryo'; }   // 立ち上がりは必ず受領委任払い（ブラウザが前回の選択を復元することがあるため）
   applyPayMethodUI_();
   window.addEventListener('pageshow', () => { const pm = document.getElementById('payMethod'); if (pm && !currentCaseId && g('burdenRatio') !== 'seiho'){ pm.value = 'juryo'; applyPayMethodUI_(); } });
