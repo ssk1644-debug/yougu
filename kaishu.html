@@ -469,7 +469,9 @@ async function callClaudeAPI(content, maxTokens=1500){
     }
     const t = await res.text().catch(()=> "");
     let msg = t; try{ msg = JSON.parse(t).error.message; }catch(e){}
-    lastErr = new Error(`APIエラー ${res.status}：${String(msg).slice(0,300)}`);
+    lastErr = new Error(res.status === 401
+      ? 'APIキーが正しくないか、無効になっています。⚙設定でAPIキーを入れ直してください（用具購入ツールと共通のキーです）'
+      : `APIエラー ${res.status}：${String(msg).slice(0,300)}`);
     // 混雑・一時的なエラーは少し待って再試行する
     if ([429, 500, 502, 503, 529].includes(res.status)){ await new Promise(r=>setTimeout(r, 2000 * (attempt+1))); continue; }
     break;
