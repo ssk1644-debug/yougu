@@ -464,7 +464,14 @@ async function callClaudeAPI(content, maxTokens=1500){
     if (res.ok){
       const data = await res.json();
       const text = (data.content || []).filter(c => c.type === "text").map(c => c.text).join("");
-      if (data.stop_reason === "max_tokens") console.warn("max_tokensで途中終了しました");
+      // 文章が途中で切れた／考える処理で上限を使い切って本文が空のときは、上限を増やしてもう一度
+      if (data.stop_reason === "max_tokens" && maxTokens < 32000){ maxTokens = Math.min(32000, maxTokens * 4); lastErr = new Error('返答が長すぎて途中で切れました'); continue; }
+      if (!text.trim()){
+        const kinds = (data.content || []).map(c => c.type).join(',') || 'なし';
+        lastErr = new Error(`AIから文章が返ってきませんでした（終了理由：${data.stop_reason || '不明'}／内容：${kinds}）`);
+        if (data.stop_reason === "refusal") break;
+        continue;
+      }
       return text;
     }
     const t = await res.text().catch(()=> "");
@@ -555,7 +562,7 @@ async function readDocs(){
  "home_environment":"住環境について書かれていること（段差・手すりの有無・浴室・トイレの形状など）。無ければ空文字"
 }
 読み取れない項目は空文字にしてください。和暦は西暦に変換してください。`;
-    const text = await callClaudeAPI([...blocks, {type:'text', text:prompt}], 3000);
+    const text = await callClaudeAPI([...blocks, {type:'text', text:prompt}], 6000);
     lastDocRead = parseAiJson(text);
     showDocReview(lastDocRead);
     st.textContent = '読み取りが完了しました。内容を確認して反映してください。'; st.style.color = 'var(--success)';
@@ -866,7 +873,7 @@ ${blockDef}
 - 付帯工事（区分6）は、どの工事に付帯して必要なのかを方針に書く
 - 常体（〜である・〜為）。見本と同じく「〜にて」「〜する事により」「〜が行えるようになる」の言い回しを使う
 - ②は「〜困っている。」、方針は「〜が行えるようになる。」で終える`;
-    const text = await callClaudeAPI([{type:'text', text:prompt}], 4000);
+    const text = await callClaudeAPI([{type:'text', text:prompt}], 8000);
     const d = parseAiJson(text);
     if (d.body) $('rBody').value = d.body;
     if (d.care) $('rCare').value = d.care;
