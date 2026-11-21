@@ -451,15 +451,40 @@ async function testGasConnection(){
 async function callClaudeAPI(content, maxTokens=1500){
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("APIキーが未設定です（⚙設定から登録してください）");
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json", "x-api-key": apiKey, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" },
-    body: JSON.stringify({ model: getApiModel(), max_tokens: maxTokens, messages:[{role:"user", content}] })
-  });
-  if (!res.ok){ const t = await res.text().catch(()=> ""); throw new Error("API_ERROR " + res.status + " " + t.slice(0,200)); }
-  const data = await res.json();
-  const block = (data.content || []).find(c => c.type === "text");
-  return block ? block.text : "";
+  let lastErr = null;
+  for (let attempt = 0; attempt < 3; attempt++){
+    let res;
+    try{
+      res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "x-api-key": apiKey, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" },
+        body: JSON.stringify({ model: getApiModel(), max_tokens: maxTokens, messages:[{role:"user", content}] })
+      });
+    }catch(e){ lastErr = new Error("通信エラー（ネット接続を確認してください）：" + e.message); await new Promise(r=>setTimeout(r, 1500)); continue; }
+    if (res.ok){
+      const data = await res.json();
+      const text = (data.content || []).filter(c => c.type === "text").map(c => c.text).join("");
+      if (data.stop_reason === "max_tokens") console.warn("max_tokensで途中終了しました");
+      return text;
+    }
+    const t = await res.text().catch(()=> "");
+    let msg = t; try{ msg = JSON.parse(t).error.message; }catch(e){}
+    lastErr = new Error(`APIエラー ${res.status}：${String(msg).slice(0,300)}`);
+    // 混雑・一時的なエラーは少し待って再試行する
+    if ([429, 500, 502, 503, 529].includes(res.status)){ await new Promise(r=>setTimeout(r, 2000 * (attempt+1))); continue; }
+    break;
+  }
+  throw lastErr;
+}
+// AIの返答からJSONを取り出す（```json の囲み・末尾カンマ・前後の説明文に強くする）
+function parseAiJson(text){
+  let t = String(text || '').replace(/```(?:json)?/gi, '');
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a < 0 || b < a) throw new Error('AIの返答にJSONが見つかりません：' + t.slice(0,120));
+  t = t.slice(a, b+1);
+  try{ return JSON.parse(t); }catch(e){}
+  const fixed = t.replace(/,\s*([}\]])/g, '$1').replace(/[\u201c\u201d]/g, '"').replace(/:\s*(true|false)\b/gi, (m,v)=>': '+v.toLowerCase());
+  try{ return JSON.parse(fixed); }catch(e){ throw new Error('AIの返答を読み取れませんでした（' + e.message + '）'); }
 }
 
 // ============================================================
@@ -473,7 +498,10 @@ function handleDocUpload(evt){
     const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
     const reader = new FileReader();
     reader.onload = e => {
-      if (isPdf){ uploadedDocs.push({dataUrl:e.target.result, kind:'pdf', name:file.name}); renderDocPreview(); return; }
+      if (isPdf){
+        if (file.size > 25*1024*1024){ $('docStatus').textContent = `「${file.name}」は大きすぎます（25MBまで）。ページを分けるか画像にしてください`; $('docStatus').style.color = 'var(--error)'; return; }
+        uploadedDocs.push({dataUrl:e.target.result, kind:'pdf', name:file.name}); renderDocPreview(); return;
+      }
       const img = new Image();
       img.onload = () => {
         let {width, height} = img; const max = 1500;
@@ -482,6 +510,7 @@ function handleDocUpload(evt){
         c.getContext('2d').drawImage(img,0,0,width,height);
         uploadedDocs.push({dataUrl:c.toDataURL('image/jpeg',0.85), kind:'image', name:file.name}); renderDocPreview();
       };
+      img.onerror = () => { $('docStatus').textContent = `「${file.name}」は画像として開けませんでした（iPhoneのHEIC形式ならJPEGで保存し直すか、スクリーンショットにしてください）`; $('docStatus').style.color = 'var(--error)'; };
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
@@ -524,12 +553,11 @@ async function readDocs(){
  "home_environment":"住環境について書かれていること（段差・手すりの有無・浴室・トイレの形状など）。無ければ空文字"
 }
 読み取れない項目は空文字にしてください。和暦は西暦に変換してください。`;
-    const text = await callClaudeAPI([...blocks, {type:'text', text:prompt}], 1500);
-    const m = text.match(/\{[\s\S]*\}/); if (!m) throw new Error("読み取り結果の形式が不正です");
-    lastDocRead = JSON.parse(m[0]);
+    const text = await callClaudeAPI([...blocks, {type:'text', text:prompt}], 3000);
+    lastDocRead = parseAiJson(text);
     showDocReview(lastDocRead);
     st.textContent = '読み取りが完了しました。内容を確認して反映してください。'; st.style.color = 'var(--success)';
-  }catch(e){ st.textContent = '読み取りに失敗しました：' + e.message; st.style.color = 'var(--error)'; }
+  }catch(e){ console.error(e); st.textContent = '読み取りに失敗しました：' + e.message; st.style.color = 'var(--error)'; }
 }
 function showDocReview(d){
   const box = $('docReview'); box.style.display = 'block';
@@ -836,9 +864,8 @@ ${blockDef}
 - 付帯工事（区分6）は、どの工事に付帯して必要なのかを方針に書く
 - 常体（〜である・〜為）。見本と同じく「〜にて」「〜する事により」「〜が行えるようになる」の言い回しを使う
 - ②は「〜困っている。」、方針は「〜が行えるようになる。」で終える`;
-    const text = await callClaudeAPI([{type:'text', text:prompt}], 3000);
-    const m = text.match(/\{[\s\S]*\}/); if (!m) throw new Error('結果の形式が不正です');
-    const d = JSON.parse(m[0]);
+    const text = await callClaudeAPI([{type:'text', text:prompt}], 4000);
+    const d = parseAiJson(text);
     if (d.body) $('rBody').value = d.body;
     if (d.care) $('rCare').value = d.care;
     if (d.wish) $('rWish').value = d.wish;
