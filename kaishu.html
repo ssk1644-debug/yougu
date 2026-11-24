@@ -202,11 +202,11 @@ textarea{resize:vertical;min-height:70px;line-height:1.6;}
 
       <div class="div"></div>
       <div class="sublbl">工事費内訳（別表）</div>
-      <p class="note">よく使う工事をタップすると行が追加されます。<b>区分</b>は申請書の「住宅改修の内容」1〜6に対応し、「対象外」にした行は介護保険の対象外として分けて集計されます。単価は一度入れると次回から自動で入ります。</p>
+      <p class="note">よく使う工事をタップすると行が追加されます。<b>材料単価</b>（×数量）と<b>施工費</b>（取付け工事代・1式）を分けて入れると、見積書・内訳書で「材料費」「施工費」の行に分かれます。値引きはマイナスの金額で入れてください。<b>区分</b>は申請書の「住宅改修の内容」1〜6に対応し、「対象外」にした行は介護保険の対象外として分けて集計されます。単価は一度入れると次回から自動で入ります。</p>
       <div class="presets" id="presetChips"></div>
       <div style="overflow-x:auto;">
       <table class="wtable" id="workTable">
-        <thead><tr><th style="width:30px;">図</th><th style="width:110px;">箇所</th><th style="width:120px;">区分</th><th>工事内容・品名・規格</th><th style="width:62px;">数量</th><th style="width:62px;" class="hide-sp">単位</th><th style="width:96px;">単価（円）</th><th style="width:96px;text-align:right;">金額</th><th style="width:28px;"></th></tr></thead>
+        <thead><tr><th style="width:30px;">図</th><th style="width:110px;">箇所</th><th style="width:120px;">区分</th><th>工事内容・品名・規格</th><th style="width:62px;">数量</th><th style="width:62px;" class="hide-sp">単位</th><th style="width:92px;">材料単価</th><th style="width:88px;">施工費</th><th style="width:96px;text-align:right;">金額</th><th style="width:28px;"></th></tr></thead>
         <tbody id="workBody"></tbody>
       </table>
       </div>
@@ -338,6 +338,7 @@ textarea{resize:vertical;min-height:70px;line-height:1.6;}
       <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
         <label class="btn">📷 施工前の写真<input type="file" accept="image/*" multiple style="display:none;" onchange="addPhotos(event,'施工前')"></label>
         <label class="btn">📷 施工後の写真<input type="file" accept="image/*" multiple style="display:none;" onchange="addPhotos(event,'施工後')"></label>
+        <label class="chk" style="margin-left:auto;"><input type="checkbox" id="photoStamp">写真の右下に撮影日を重ねて印刷する（日付カードを写し込んでいる場合は不要）</label>
       </div>
       <div class="photos" id="photoGrid"></div>
     </div>
@@ -353,7 +354,7 @@ textarea{resize:vertical;min-height:70px;line-height:1.6;}
           <select id="receiptMode" onchange="recalc()"><option value="self">お客様のお支払い分（自己負担＋対象外）</option><option value="total">工事費の総額</option></select></div>
         <div class="f s2"><label>但し書き</label><input type="text" id="receiptNote" value="住宅改修工事代金として"></div>
       </div>
-      <p class="note" style="margin-top:8px;">領収証は被保険者名義で発行され、内訳（工事費総額・保険対象額・保険給付額・自己負担額）を併記します。福山市への提出用と控えの2部をA4 1枚に出力します。</p>
+      <p class="note" style="margin-top:8px;">領収金額が5万円以上のときは、提出用に収入印紙（200円）を貼る枠が出ます。領収証は被保険者名義で発行され、内訳（工事費総額・保険対象額・保険給付額・自己負担額）を併記します。福山市への提出用と控えの2部をA4 1枚に出力します。</p>
     </div>
   </div>
 
@@ -364,7 +365,8 @@ textarea{resize:vertical;min-height:70px;line-height:1.6;}
   <button class="btn" onclick="saveCurrentCase()">💾 案件保存</button>
   <button class="btn bp" onclick="generateApplication()">📄 支給申請書（Word）</button>
   <button class="btn bp" onclick="printReason()">💬 理由書</button>
-  <button class="btn bp" onclick="printBreakdown()">📑 工事費内訳書</button>
+  <button class="btn bp" onclick="printEstimate('est')">📑 見積書（事前）</button>
+  <button class="btn bp" onclick="printEstimate('uchi')">📑 内訳書（事後）</button>
   <button class="btn bp" onclick="printReceipt()">🧾 領収証</button>
   <button class="btn bp" onclick="printPhotos()">📸 写真台紙</button>
 </div>
@@ -382,7 +384,8 @@ textarea{resize:vertical;min-height:70px;line-height:1.6;}
       <select id="railStyle" onchange="redrawRail()" style="font-size:12px;padding:5px 6px;"><option value="rail">手すり（木目色）</option><option value="red">赤線（計画線）</option></select>
       <span class="note" style="margin-left:6px;">番号・名前：</span>
       <select id="railLabel" style="font-size:12px;padding:5px 6px;max-width:220px;"></select>
-      <input id="railLabelFree" placeholder="自由入力（例：縦手すり L=600）" style="font-size:12px;padding:5px 8px;width:180px;">
+      <input id="railLabelFree" placeholder="自由入力（例：縦手すり）" style="font-size:12px;padding:5px 8px;width:150px;">
+      <span class="note">長さ：</span><input id="railLen" type="number" placeholder="mm" style="font-size:12px;padding:5px 6px;width:72px;" title="入れると「全長1800mm」のように書き込みます">
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border-light);background:#fafbf7;">
       <button class="btn sm bp" onclick="aiDetectRails()">🤖 写真のマーキングから自動で入れる</button>
@@ -668,10 +671,11 @@ const PRESETS = [
 ];
 const PRICE_MEMORY = "asport_kaishu_price_memory";
 function priceMemory(){ try{ return JSON.parse(localStorage.getItem(PRICE_MEMORY) || '{}'); }catch(e){ return {}; } }
-function rememberPrice(name, price){
-  if (!name || !price) return;
-  try{ const m = priceMemory(); m[name] = price; localStorage.setItem(PRICE_MEMORY, JSON.stringify(m)); }catch(e){}
+function rememberPrice(name, price, labor){
+  if (!name || (!price && !labor)) return;
+  try{ const m = priceMemory(); m[name] = {p: price || '', l: labor || ''}; localStorage.setItem(PRICE_MEMORY, JSON.stringify(m)); }catch(e){}
 }
+function memPrice_(name){ const v = priceMemory()[name]; if (v == null) return {p:'', l:''}; return typeof v === 'object' ? v : {p:v, l:''}; }
 function renderPresetChips(){
   $('presetChips').innerHTML = PRESETS.map((p,i) => `<button class="pchip ${p.t==='x'?'out':''}" onclick="addPreset(${i})"><b>${p.t==='x'?'外':p.t}</b>${escHtml(p.n)}</button>`).join('');
 }
@@ -679,10 +683,11 @@ let rows = [];
 function addPreset(i){
   const p = PRESETS[i];
   const lastPlace = rows.length ? rows[rows.length-1].place : '';
-  rows.push({place:lastPlace, type:p.t, name:p.n, qty:1, unit:p.u, price: priceMemory()[p.n] || ''});
+  const mp = memPrice_(p.n);
+  rows.push({place:lastPlace, type:p.t, name:p.n, qty:1, unit:p.u, price: mp.p, labor: mp.l});
   renderRows(); recalc();
 }
-function addRow(){ rows.push({place:'', type:'1', name:'', qty:1, unit:'式', price:''}); renderRows(); recalc(); }
+function addRow(){ rows.push({place:'', type:'1', name:'', qty:1, unit:'式', price:'', labor:''}); renderRows(); recalc(); }
 function delRow(i){ rows.splice(i,1); renderRows(); recalc(); }
 function renderRows(){
   $('workBody').innerHTML = rows.map((r,i) => `
@@ -693,10 +698,11 @@ function renderRows(){
       <td><input value="${escHtml(r.name)}" oninput="rows[${i}].name=this.value;refreshFigNos()"></td>
       <td><input type="number" step="0.1" min="0" value="${escHtml(r.qty)}" oninput="rows[${i}].qty=this.value;recalc()"></td>
       <td class="hide-sp"><input value="${escHtml(r.unit)}" oninput="rows[${i}].unit=this.value"></td>
-      <td><input type="number" min="0" value="${escHtml(r.price)}" oninput="rows[${i}].price=this.value;recalc()" onchange="rememberPrice(rows[${i}].name, this.value)"></td>
+      <td><input type="number" value="${escHtml(r.price)}" placeholder="材料" oninput="rows[${i}].price=this.value;recalc()" onchange="rememberPrice(rows[${i}].name, this.value, rows[${i}].labor)"></td>
+      <td><input type="number" value="${escHtml(r.labor ?? '')}" placeholder="取付" oninput="rows[${i}].labor=this.value;recalc()" onchange="rememberPrice(rows[${i}].name, rows[${i}].price, this.value)"></td>
       <td class="amt" id="amt${i}"></td>
       <td><button class="del" onclick="delRow(${i})" title="削除">×</button></td>
-    </tr>`).join('') || `<tr><td colspan="9" class="note" style="padding:14px;text-align:center;">上のボタンから工事を追加してください</td></tr>`;
+    </tr>`).join('') || `<tr><td colspan="10" class="note" style="padding:14px;text-align:center;">上のボタンから工事を追加してください</td></tr>`;
 }
 // 図面・理由書で使う番号（①②…）：介護保険対象の工事行に上から順に振る（付帯工事・対象外は番号なし）
 const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
@@ -707,7 +713,10 @@ function figNo(i){
   return (r && r.type !== 'x' && r.type !== '6' && r.name) ? (CIRCLED[n-1] || `(${n})`) : '';
 }
 function refreshFigNos(){ rows.forEach((r,i) => { const el = $('fig'+i); if (el) el.textContent = figNo(i); }); }
-function rowAmount(r){ return Math.round((parseFloat(r.qty)||0) * (parseFloat(r.price)||0)); }
+// 金額＝材料（数量×材料単価）＋施工費（1式）
+function rowMaterial(r){ return Math.round((parseFloat(r.qty)||0) * (parseFloat(r.price)||0)); }
+function rowLabor(r){ return Math.round(parseFloat(r.labor)||0); }
+function rowAmount(r){ return rowMaterial(r) + rowLabor(r); }
 
 // 改修種別チェック（自動＋手動）
 let typeManual = {};   // {"1":true/false} 手動で変更したもの
@@ -1170,7 +1179,7 @@ function openRailEditor(i){
   railAnns = JSON.parse(JSON.stringify(p.rails || [])); railSel = -1;
   $('railStyle').value = p.railStyle || 'rail';
   $('railLabel').innerHTML = railLabelOptions_().map(o => `<option>${escHtml(o)}</option>`).join('');
-  $('railLabelFree').value = ''; $('railStatus').textContent = '';
+  $('railLabelFree').value = ''; $('railLen').value = ''; $('railStatus').textContent = '';
   railImg = new Image();
   railImg.onload = () => {
     const c = $('railCanvas'); c.width = railImg.naturalWidth; c.height = railImg.naturalHeight;
@@ -1180,8 +1189,10 @@ function openRailEditor(i){
 }
 function setRailKind(k){ railKind = k; document.querySelectorAll('.rtool').forEach(b => b.classList.toggle('bp', b.dataset.k === k)); }
 function currentRailLabel_(){
-  const free = g('railLabelFree'); if (free) return free;
-  const v = $('railLabel').value; return v === '（番号なし）' ? '' : v;
+  const free = g('railLabelFree');
+  const v = free || ($('railLabel').value === '（番号なし）' ? '' : $('railLabel').value);
+  const len = g('railLen');
+  return [v, len ? `全長${len}mm` : ''].filter(Boolean).join('　');
 }
 // 手すりの描画（写真の上に重ねる）。印刷用の合成にも同じ関数を使う
 function drawRails(ctx, w, h, anns, style, selIdx){
@@ -1289,6 +1300,7 @@ function initRailCanvas(){
 }
 // 1本描いたら番号の選択を次へ進める（①→②…と続けて描けるように）
 function advanceRailLabel_(){
+  $('railLen').value = '';
   const s = $('railLabel'); if (!g('railLabelFree') && s.selectedIndex > 0 && s.selectedIndex < s.options.length - 1) s.selectedIndex++;
 }
 function railUndo(){ railAnns.pop(); railSel = -1; redrawRail(); }
@@ -1316,7 +1328,8 @@ async function aiDetectRails(){
 JSONのみを出力：{"rails":[{"kind":"h|v|l|free","pts":[[x,y],[x,y]],"note":"縦手すり など短く"}],"comment":"見つからない場合はその理由"}
 - 座標は写真の左上を(0,0)、右下を(1000,1000)とした整数
 - kind: h=横（水平）、v=縦（垂直）、l=L型（pts は縦の上端→角→横の端 の3点）、free=斜め
-- 目印の端から端までを結ぶ。目印が見つからなければ rails は空配列にし、位置を推測で作らないこと`;
+- 目印の端から端までを結ぶ。目印が見つからなければ rails は空配列にし、位置を推測で作らないこと
+- 写真に長さ（例：L2800、600、6×6）や番号（①②）が手書きされていれば note に「① 全長2800mm」のように入れる`;
     const text = await callClaudeAPI([{type:'image', source:{type:'base64', media_type:'image/jpeg', data:b64}}, {type:'text', text:prompt}], 2000);
     const d = parseAiJson(text);
     const found = (d.rails || []).filter(r => Array.isArray(r.pts) && r.pts.length >= 2);
@@ -1522,80 +1535,98 @@ function openPrintWindow(title, css, bodyHtml){
 }
 function typeTag(t){ return t==='x' ? '対象外' : t; }
 
-function buildBreakdownHtml(){
+// 写真No.：箇所ごとに1つ（工事内訳に出てくる順）。見積書の「該当写真番号」と写真台紙で同じ番号を使う
+function photoNoMap_(){
+  const m = {}; let n = 0;
+  rows.forEach(r => { const p = r.place || ''; if (r.name && r.type !== 'x' && p && !(p in m)) m[p] = ++n; });
+  photos.forEach(ph => { const p = ph.place || ''; if (p && !(p in m)) m[p] = ++n; });
+  return m;
+}
+const TYPE_SHORTNAME = {"1":"手すりの取付","2":"段差の解消","3":"床材の変更","4":"扉の取替え","5":"便器の取替え","6":"付帯工事"};
+// 工事費見積書（事前）／工事費内訳書（事後）：アスポートの実例の形（材料費・施工費を別の行に）
+function buildEstimateHtml(kind){
   const c = calc();
-  const list = rows.filter(r => r.name || rowAmount(r));
-  const inRows = list.filter(r=>r.type!=='x'), outRows = list.filter(r=>r.type==='x');
-  const tr = (r,i) => `<tr${r.type==='x'?' class="out"':''}><td class="c">${i+1}</td><td>${escHtml(r.place)}</td><td class="c">${typeTag(r.type)}</td><td>${escHtml(r.name)}</td><td class="r">${escHtml(r.qty)}</td><td class="c">${escHtml(r.unit)}</td><td class="r">${r.price!==''?fmt(r.price):''}</td><td class="r">${fmt(rowAmount(r))}</td></tr>`;
-  let n = 0;
-  const minRows = 14;
-  const blank = Math.max(0, minRows - list.length);
-  const taxLabel = c.taxIn ? '（税込）' : '';
+  const pno = photoNoMap_();
+  const line = (r, sub, isFirst) => {
+    if (rowAmount(r) < 0) return `<tr><td></td><td></td><td></td><td></td><td>${escHtml(r.name || '値引き')}</td><td class="c">1</td><td class="c">式</td><td></td><td class="r">${fmt(rowAmount(r))}</td><td></td></tr>`;
+    const amt = sub === '材料費' ? rowMaterial(r) : rowLabor(r);
+    const qty = sub === '材料費' ? r.qty : 1, unit = sub === '材料費' ? r.unit : '式';
+    const unitPrice = sub === '材料費' ? r.price : r.labor;
+    const nm = sub === '施工費' && rowMaterial(r) ? '取り付け施工費' : r.name;
+    return `<tr>
+      <td class="c">${isFirst && r.type !== 'x' ? r.type : ''}</td><td>${isFirst ? (r.type === 'x' ? '（対象外）' : TYPE_SHORTNAME[r.type]) : ''}</td>
+      <td class="c">${isFirst ? escHtml(r.place) : ''}</td><td class="c">${sub}</td><td>${escHtml(nm)}</td>
+      <td class="c">${escHtml(qty)}</td><td class="c">${escHtml(unit)}</td><td class="r">${unitPrice !== '' && unitPrice != null ? fmt(unitPrice) : ''}</td><td class="r">${fmt(amt)}</td>
+      <td class="c">${isFirst && r.place && pno[r.place] && r.type !== 'x' ? pno[r.place] : ''}</td></tr>`;
+  };
+  const toLines = list => list.flatMap(r => {
+    if (rowAmount(r) < 0) return [line(r, '', true)];
+    const out = []; let first = true;
+    if (rowMaterial(r) || !rowLabor(r)){ out.push(line(r, '材料費', first)); first = false; }
+    if (rowLabor(r)){ out.push(line(r, '施工費', first)); first = false; }
+    return out;
+  });
+  const used = rows.filter(r => r.name || rowAmount(r));
+  const inLines = toLines(used.filter(r => r.type !== 'x'));
+  const outLines = toLines(used.filter(r => r.type === 'x'));
+  const blank = n => '<tr class="bl"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>'.repeat(Math.max(0, n));
+  const title = kind === 'est' ? '工事費見積書' : '工事費内訳書';
+  const note = kind === 'est' ? '［事前届出書の「住宅改修に要する見積費用」の欄と同じ］' : '［申請書の「住宅改修に要した費用」の欄と同じ］';
+  const dt = kind === 'est' ? (g('rMadeDate') || todayStr()) : (g('endDate') || todayStr());
   return `<div class="page">
-    <h1>工 事 費 内 訳 書</h1>
-    <div class="sub">（住宅改修費支給申請書 別表）</div>
-    <table class="info">
-      <tr><th>被保険者名</th><td class="nm">${escHtml(g('name'))}　様</td><th>被保険者番号</th><td>${escHtml(digitsOnly(g('insNum')))}</td></tr>
-      <tr><th>住所</th><td colspan="3">${escHtml(g('addr'))}</td></tr>
-      <tr><th>着工日</th><td>${escHtml(dateJa(g('startDate')))}</td><th>完成日</th><td>${escHtml(dateJa(g('endDate')))}</td></tr>
-      <tr><th>施工業者</th><td colspan="3">${escHtml(g('contractor'))}　（${escHtml(g('dAddr'))}　TEL ${escHtml(g('dPhone'))}）</td></tr>
-    </table>
-    <table class="list">
-      <thead><tr><th style="width:8mm">No</th><th style="width:24mm">箇所</th><th style="width:13mm">区分</th><th>工事内容・品名・規格</th><th style="width:13mm">数量</th><th style="width:11mm">単位</th><th style="width:20mm">単価${taxLabel}</th><th style="width:23mm">金額${taxLabel}</th></tr></thead>
+    <div class="top"><span class="bt">（別表）</span><span class="nm">${escHtml(g('name'))}　様</span><span class="dt">${escHtml(dateJa(dt))}</span></div>
+    <h1>${title}</h1>
+    <table class="est">
+      <thead>
+        <tr><th colspan="2">住宅改修の内容</th><th rowspan="2" style="width:16mm">箇所</th><th rowspan="2" style="width:13mm">区分</th><th rowspan="2">商品の名称</th><th rowspan="2" style="width:10mm">数量</th><th rowspan="2" style="width:9mm">単位</th><th rowspan="2" style="width:17mm">単価(円)</th><th rowspan="2" style="width:19mm">金額</th><th rowspan="2" style="width:13mm">備考<br><small>〔該当写真番号〕</small></th></tr>
+        <tr><th style="width:8mm"><small>種別<br>番号</small></th><th style="width:25mm"><small>〔介護保険支給対象内〕</small></th></tr>
+      </thead>
       <tbody>
-        ${inRows.map(r=>tr(r,n++)).join('')}
-        ${outRows.map(r=>tr(r,n++)).join('')}
-        ${'<tr class="bl"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>'.repeat(blank)}
+        ${inLines.join('')}${blank(18 - inLines.length)}
+        ${c.taxIn ? '' : `<tr><td></td><td></td><td></td><td></td><td class="c">消費税</td><td class="c">10%</td><td></td><td></td><td class="r">${fmt(c.inTax)}</td><td></td></tr>`}
+        <tr class="tot"><td colspan="8" class="c">合　計　金　額　<small>${note}</small></td><td class="r">${fmt(c.inTotal)}</td><td></td></tr>
+        <tr class="sec"><td colspan="10">〔介護保険支給対象外〕</td></tr>
+        ${outLines.join('')}${blank(3 - outLines.length)}
+        ${c.taxIn || !c.outSub ? '' : `<tr><td></td><td></td><td></td><td></td><td class="c">消費税</td><td class="c">10%</td><td></td><td></td><td class="r">${fmt(c.outTax)}</td><td></td></tr>`}
+        <tr class="tot"><td colspan="8" class="c">合計金額（支給対象外）</td><td class="r">${fmt(c.outTotal)}</td><td></td></tr>
+        <tr class="grand"><td colspan="8" class="c">総　合　計</td><td class="r">¥${fmt(c.total)}</td><td></td></tr>
       </tbody>
     </table>
-    <table class="sum">
-      <tr><th>介護保険 対象内 小計</th><td>${fmt(c.inSub)} 円</td><th>介護保険 対象外 小計</th><td>${fmt(c.outSub)} 円</td></tr>
-      ${c.taxIn ? '' : `<tr><th>消費税（10%）</th><td>${fmt(c.inTax)} 円</td><th>消費税（10%）</th><td>${fmt(c.outTax)} 円</td></tr>`}
-      <tr class="tot"><th>介護保険 対象内 合計</th><td>${fmt(c.inTotal)} 円</td><th>介護保険 対象外 合計</th><td>${fmt(c.outTotal)} 円</td></tr>
-      <tr class="grand"><th colspan="3">工事費 総額（税込）</th><td>${fmt(c.total)} 円</td></tr>
-    </table>
-    <div class="legend">区分：1 手すりの取付け／2 段差の解消／3 滑りの防止及び移動の円滑化等のための床又は通路面の材料の変更／4 引き戸等への扉の取替え／5 洋式便器等への便器の取替え／6 その他1から5の住宅改修に付帯して必要となる住宅改修／対象外：介護保険の対象外工事（全額自己負担）</div>
-    <div class="foot">
-      <div>${escHtml(g('dBiz'))}<br><span>${escHtml(g('dAddr'))}　TEL ${escHtml(g('dPhone'))}</span></div>
-      <div class="staff">担当：${escHtml(staffName())}</div>
-    </div>
+    <div class="foot"><span>事業者名　${escHtml(g('dBiz'))}</span><span class="addr">${escHtml(g('dAddr'))}　TEL ${escHtml(g('dPhone'))}</span><span class="in">印</span></div>
   </div>`;
 }
-const BREAKDOWN_CSS = `
-h1{text-align:center;font-size:22px;font-weight:700;letter-spacing:.5em;margin-top:2mm;}
-.sub{text-align:center;font-size:11px;color:#555;margin:2mm 0 6mm;}
-table{width:100%;border-collapse:collapse;font-size:11.5px;}
-.info th,.info td{border:1px solid #333;padding:2.2mm 2.5mm;text-align:left;}
-.info th{background:#f1f3ee;width:25mm;font-weight:500;white-space:nowrap;}
-.info td.nm{font-size:15px;font-weight:700;}
-.list{margin-top:5mm;}
-.list th{border:1px solid #333;background:#f1f3ee;font-weight:500;padding:1.8mm 1mm;font-size:10.5px;}
-.list td{border:1px solid #333;padding:1.8mm 1.5mm;height:7.5mm;}
-.list tr.out td{background:#faf5ec;}
+const ESTIMATE_CSS = `
+.top{display:flex;align-items:baseline;gap:10mm;font-size:12px;}
+.top .nm{font-size:15px;font-weight:700;border-bottom:1px solid #000;padding:0 8mm 1mm;}
+.top .dt{margin-left:auto;font-size:11px;}
+h1{font-size:18px;font-weight:700;margin:3mm 0 3mm 6mm;letter-spacing:.1em;}
+table.est{width:100%;border-collapse:collapse;font-size:10.5px;}
+.est th{border:1px solid #000;font-weight:500;padding:1mm;background:#f3f3f0;}
+.est th small{font-size:8px;font-weight:400;}
+.est td{border-left:1px solid #000;border-right:1px solid #000;border-bottom:1px dotted #999;padding:1.2mm 1.2mm;height:6.4mm;}
+.est tr.tot td,.est tr.grand td{border:1px solid #000;font-weight:700;}
+.est tr.tot small{font-weight:400;font-size:8.5px;}
+.est tr.grand td{font-size:13px;}
+.est tr.sec td{border:1px solid #000;background:#f3f3f0;font-size:9.5px;}
 .c{text-align:center;}.r{text-align:right;}
-.sum{margin-top:4mm;}
-.sum th,.sum td{border:1px solid #333;padding:2mm 2.5mm;}
-.sum th{background:#f1f3ee;font-weight:500;text-align:left;width:40mm;}
-.sum td{text-align:right;}
-.sum tr.tot th,.sum tr.tot td{font-weight:700;}
-.sum tr.grand th{text-align:right;font-weight:700;}
-.sum tr.grand td{font-size:15px;font-weight:700;}
-.legend{font-size:9.5px;color:#444;line-height:1.6;margin-top:4mm;}
-.foot{display:flex;justify-content:space-between;align-items:flex-end;margin-top:7mm;font-size:13px;font-weight:700;}
-.foot span{font-size:10.5px;font-weight:400;}
-.staff{font-size:11.5px;font-weight:500;}
+.foot{display:flex;align-items:baseline;gap:6mm;margin-top:5mm;font-size:14px;font-weight:700;border-bottom:1px solid #000;padding-bottom:1mm;}
+.foot .addr{font-size:9.5px;font-weight:400;}
+.foot .in{margin-left:auto;font-weight:400;}
 `;
-function printBreakdown(){
+function printEstimate(kind){
   if (!rows.some(r=>r.name || rowAmount(r))){ toast('③の工事内訳が空です', false); return; }
-  openPrintWindow('工事費内訳書_' + g('name'), BREAKDOWN_CSS, buildBreakdownHtml());
+  openPrintWindow((kind === 'est' ? '工事費見積書_' : '工事費内訳書_') + g('name'), ESTIMATE_CSS, buildEstimateHtml(kind));
 }
+function printBreakdown(){ printEstimate('uchi'); }
 
 function buildReceiptHtml(){
   const c = calc();
   const amount = g('receiptMode') === 'total' ? c.total : c.selfPay;
-  const copy = (label) => `
+  const needStamp = amount >= 50000;
+  const copy = (label, original) => `
     <div class="frame">
       <div class="badge">${label}</div>
+      ${original && needStamp ? '<div class="inshi">収入<br>印紙</div>' : ''}
       <h1>領　収　証</h1>
       <div class="cust">${escHtml(g('name'))}<small>　様</small></div>
       <div class="amt"><span class="y">金額</span><span class="v">￥${fmt(amount)}－</span></div>
@@ -1619,7 +1650,7 @@ function buildReceiptHtml(){
         </div>
       </div>
     </div>`;
-  return `<div class="page rc">${copy('福山市 提出用')}<div class="cut">✂ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</div>${copy('お客様 控え')}</div>`;
+  return `<div class="page rc">${copy('福山市 提出用', true)}<div class="cut">✂ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</div>${copy('お客様 控え', false)}</div>`;
 }
 function TYPE_LIST_SHORT(){
   const t = selectedTypes();
@@ -1643,6 +1674,7 @@ h1{text-align:center;font-size:24px;font-weight:500;letter-spacing:.35em;margin:
 .comp{text-align:right;}
 .comp .cn{font-size:15px;font-weight:700;}
 .cut{text-align:center;color:#888;font-size:11px;margin:6mm 0;white-space:nowrap;overflow:hidden;}
+.inshi{position:absolute;right:8mm;top:30mm;width:22mm;height:26mm;border:1px dashed #888;color:#999;font-size:10px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.4;}
 `;
 function printReceipt(){
   const c = calc();
@@ -1651,27 +1683,71 @@ function printReceipt(){
   openPrintWindow('領収証_' + g('name'), RECEIPT_CSS, buildReceiptHtml());
 }
 
+// 写真台紙：アスポートの実例の形
+//  施工前＝「事前届出書・添付書類（着工前及び完成予定図欄）」：手すりを描き込んだ写真は上に着工前、下に完成予定図
+//  施工後＝「支給申請書・添付書類（着工後の写真貼付け欄）」：1ページに2箇所
+const TYPE_CHECK_LABELS = [["1","①手すり"],["2","②段差解消"],["3","③床材変更"],["4","④扉等取替"],["5","⑤便器取替"],["6","⑥付帯工事"]];
+function placeTypes_(place){ return new Set(rows.filter(r => r.name && r.type !== 'x' && (r.place||'') === (place||'')).map(r => r.type)); }
+function photoImg_(url, p){
+  const stamp = $('photoStamp') && $('photoStamp').checked && p.date ? `<div class="stamp">${escHtml(p.date.replace(/-/g,'/'))}</div>` : '';
+  return `<div class="im"><img src="${url}">${stamp}</div>`;
+}
+function photoEntry_(no, place, label, imgsHtml){
+  const ts = placeTypes_(place);
+  return `<div class="entry">
+    <div class="side">
+      <div class="no">写真No.<b>${escHtml(no)}</b></div>
+      <div class="types"><div class="tt">保険対象工事種目</div>${TYPE_CHECK_LABELS.map(([k,l]) => `<div>${ts.has(k) ? '■' : '□'}${l}</div>`).join('')}<div>（　　　　　）</div></div>
+      <div class="lbl">${label}</div>
+      ${label === '着工前' ? '<div class="note2">（注）必ず写真の中に撮影年月日が入ったものとしてください。</div>' : ''}
+    </div>
+    <div class="box"><div class="plc"><span>改 修 箇 所</span><b>（${escHtml(place || '　　　　')}）</b></div><div class="imgs">${imgsHtml}</div></div>
+  </div>`;
+}
 function buildPhotoHtml(){
-  const sorted = [...photos].sort((a,b) => (a.place||'').localeCompare(b.place||'','ja') || (a.kind==='施工前'?0:1)-(b.kind==='施工前'?0:1));
-  const per = 6; const pages = [];
-  for (let i=0; i<sorted.length; i+=per) pages.push(sorted.slice(i, i+per));
-  return pages.map((pg, pi) => `<div class="page">
-    <div class="hd"><b>住宅改修 施工写真</b><span>被保険者：${escHtml(g('name'))}　様　／　施工：${escHtml(g('contractor'))}　（${pi+1}/${pages.length}）</span></div>
-    <div class="pg">${pg.map(p => `<div class="cell"><div class="im"><img src="${p.railUrl || p.dataUrl}"><div class="stamp">${escHtml((p.date||'').replace(/-/g,'/'))}</div></div><div class="cap"><span class="k ${p.kind==='施工後'?'after':''}">${p.kind}${p.kind==='施工前' && p.rails && p.rails.length ? '（取付予定）' : ''}</span>${escHtml(p.place||'')}<span class="d">撮影日 ${escHtml(dateJa(p.date,'wareki'))}</span></div></div>`).join('')}</div>
-  </div>`).join('');
+  const pno = photoNoMap_();
+  const byPlace = kind => {
+    const m = {};
+    photos.filter(p => p.kind === kind).forEach(p => { (m[p.place||''] = m[p.place||''] || []).push(p); });
+    return Object.entries(m).sort((a,b) => (pno[a[0]]||99) - (pno[b[0]]||99));
+  };
+  const pages = [];
+  // 施工前
+  const beforeEntries = [];
+  byPlace('施工前').forEach(([place, ps]) => {
+    ps.forEach(p => {
+      const no = pno[place] || '';
+      if (p.railUrl) pages.push({title:'介護保険住宅改修費事前届出書・添付書類（着工前及び完成予定図欄）', entries:[photoEntry_(no, place, '着工前', photoImg_(p.dataUrl, p)), photoEntry_(no, place, '完成予定図', photoImg_(p.railUrl, p))]});
+      else beforeEntries.push(photoEntry_(no, place, '着工前', photoImg_(p.dataUrl, p)));
+    });
+  });
+  for (let i=0; i<beforeEntries.length; i+=2) pages.push({title:'介護保険住宅改修費事前届出書・添付書類（着工前及び完成予定図欄）', entries:beforeEntries.slice(i,i+2)});
+  // 施工後（同じ箇所は2枚まで横に並べる）
+  const afterEntries = [];
+  byPlace('施工後').forEach(([place, ps]) => {
+    for (let i=0; i<ps.length; i+=2) afterEntries.push(photoEntry_(pno[place] || '', place, '着工後', ps.slice(i,i+2).map(p => photoImg_(p.railUrl || p.dataUrl, p)).join('')));
+  });
+  for (let i=0; i<afterEntries.length; i+=2) pages.push({title:'介護保険住宅改修費支給申請書・添付書類（着工後の写真貼付け欄）', entries:afterEntries.slice(i,i+2)});
+  return pages.map(pg => `<div class="page"><h1>${pg.title}</h1>${pg.entries.join('')}</div>`).join('');
 }
 const PHOTO_CSS = `
-.hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #333;padding-bottom:2mm;margin-bottom:5mm;font-size:11px;}
-.hd b{font-size:16px;}
-.pg{display:grid;grid-template-columns:1fr 1fr;gap:5mm;}
-.cell{border:1px solid #999;padding:2mm;}
-.im{position:relative;height:70mm;background:#eee;}
-.im img{width:100%;height:100%;object-fit:contain;}
-.stamp{position:absolute;right:2mm;bottom:2mm;color:#ff8a00;font-weight:700;font-size:15px;font-family:monospace;text-shadow:0 0 2px #000;}
-.cap{font-size:11.5px;margin-top:1.5mm;display:flex;gap:2mm;align-items:center;}
-.cap .k{background:#555;color:#fff;font-size:10px;padding:.5mm 2mm;border-radius:2px;}
-.cap .k.after{background:#2f6b3a;}
-.cap .d{margin-left:auto;color:#444;font-size:10.5px;}
+.page{padding:12mm 12mm 8mm;}
+h1{font-size:15px;font-weight:700;text-align:center;margin-bottom:5mm;}
+.entry{display:flex;gap:4mm;height:128mm;margin-bottom:4mm;}
+.side{width:36mm;font-size:11px;}
+.side .no{border-bottom:1px solid #000;padding-bottom:1mm;margin:6mm 0 5mm;}
+.side .no b{font-size:22px;font-weight:500;margin-left:3mm;}
+.side .types{line-height:1.55;}
+.side .tt{font-size:10px;}
+.side .lbl{font-size:18px;letter-spacing:.3em;margin-top:8mm;}
+.side .note2{font-size:9.5px;line-height:1.5;margin-top:8mm;}
+.box{flex:1;border:1.5px solid #000;padding:2mm 3mm;display:flex;flex-direction:column;}
+.plc span{display:block;font-size:10px;letter-spacing:.3em;}
+.plc b{font-size:15px;font-weight:500;}
+.imgs{flex:1;display:flex;gap:3mm;align-items:center;justify-content:center;min-height:0;padding-top:2mm;}
+.im{position:relative;height:100%;flex:1;display:flex;align-items:center;justify-content:center;min-width:0;}
+.im img{max-width:100%;max-height:108mm;object-fit:contain;}
+.stamp{position:absolute;right:3mm;bottom:3mm;color:#ff8a00;font-weight:700;font-size:15px;font-family:monospace;text-shadow:0 0 2px #000;}
 `;
 function printPhotos(){
   if (!photos.length){ toast('⑥で写真を追加してください', false); return; }
