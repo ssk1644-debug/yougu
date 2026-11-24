@@ -163,7 +163,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
     <div>
       <h1>介護保険 福祉用具購入費支給申請書</h1>
       <p>受領委任払い用 ／ 自動入力フォーム（福山市）</p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-11-24-2　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-11-24-5　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -470,8 +470,8 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
           <div class="f"><label>世帯主名（任意）</label><input type="text" id="seihoSetainushi" placeholder="空欄の場合は申請者本人"></div>
           <div class="f"><label>ケース番号（任意）</label><input type="text" id="seihoCaseNo" placeholder="福祉事務所側で記入する場合は空欄可"></div>
         </div>
-        <div style="padding-top:4px;">
-          <label style="display:flex;align-items:center;gap:6px;font-weight:normal;white-space:nowrap;"><input type="checkbox" id="seihoDateBlank" style="width:auto;">申請日を空欄で出力する（手書きで記入する場合）</label>
+        <div style="margin-top:8px;background:#fff8e6;border:1px solid #f0d78c;border-radius:6px;padding:8px 10px;">
+          <label style="display:flex;align-items:center;gap:8px;font-weight:700;white-space:nowrap;cursor:pointer;"><input type="checkbox" id="seihoDateBlank" style="width:18px;height:18px;">📝 申請日を空欄で出力する（手書きで記入する場合）</label>
         </div>
         <div class="note" style="margin-top:4px;">※日付・住所・氏名・生年月日・被保険者番号・品目情報（種目名／商品名／製造事業者名／購入金額／必要な理由）は①②③欄の入力内容を自動で使用します。担当CW（ケースワーカー）名は福祉事務所側で記入するため入力欄はありません。</div>
         <button type="button" class="btn bp" style="margin-top:10px;" id="seihoBtn" onclick="generateSeihoDocs()">📄 生活保護用の追加書類を出力（申請書・委任状・充当承諾書・別紙・生活福祉課宛請求書）</button>
@@ -879,7 +879,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-11-24-2";
+const APP_VERSION = "2026-11-24-5";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -4902,11 +4902,11 @@ function generateSeihoDocs(){
       <p class="sbody">次の者に対する生活保護法による保護の変更（介護扶助）を申請する。</p>
       <table class="sftable">
         <tr><th style="width:90px;">住　所</th><td colspan="3">${esc(addr)}</td></tr>
-        <tr><th>フリガナ</th><td>${esc(kna)}</td><th style="width:70px;">性　別</th><td style="width:110px;">${esc(gender)}　　　（　${age}　歳）</td></tr>
+        <tr><th>フリガナ</th><td>${esc(kna)}</td><th style="width:70px;">性　別</th><td style="width:120px;white-space:nowrap;">${esc(gender)}　（${age}歳）</td></tr>
         <tr><th>名　前</th><td colspan="3">${esc(nm)}</td></tr>
         <tr><th>生年月日</th><td>${birthStr}</td><th>世帯主名</th><td>${blankIfEmpty(setainushi)}</td></tr>
         <tr><th>種　別</th><td colspan="3">居宅・施設介護　　<span class="boxed">福祉用具購入</span>　　住宅改修　　指定・基準該当居宅介護支援　　基準該当サービス等　　移送</td></tr>
-        <tr><th>介護保険</th><td colspan="3">有　・　無　　　　有の場合（被保険者番号　${esc(insNum)}　）</td></tr>
+        <tr><th>介護保険</th><td colspan="3">${insNum ? '<span class="circled">有</span>　・　無' : '有　・　無'}　　　　有の場合（被保険者番号　${esc(insNum)}　）</td></tr>
         <tr><th>情報提供</th><td colspan="3" class="sinfo">介護扶助の要否判定に要介護状態等の認定が必要な場合は，福山市介護保険課に対して審査判定を依頼するとともに，審査判定に必要な情報を提供することについて同意します。</td></tr>
         <tr><th>ケース番号</th><td>${blankIfEmpty(caseNo)}</td><th>担当CW</th><td>${blankIfEmpty(cw)}</td></tr>
       </table>
@@ -5042,6 +5042,7 @@ function generateSeihoDocs(){
   table.sftable th{background:#f2f2ee;font-weight:700;white-space:nowrap;width:100px;}
   .sinfo{font-size:11.5px;line-height:1.7;}
   .boxed{display:inline-block;border:1.5px solid #333;padding:1px 8px;font-weight:700;}
+  .circled{display:inline-block;border:1.5px solid #333;border-radius:50%;padding:0 8px;}
   table.sitemtable{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;}
   table.sitemtable th{border:1px solid #333;background:#f2f2ee;padding:6px;text-align:center;}
   table.sitemtable td{border:1px solid #333;padding:8px;vertical-align:top;}
