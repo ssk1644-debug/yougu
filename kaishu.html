@@ -334,7 +334,7 @@ textarea{resize:vertical;min-height:70px;line-height:1.6;}
   <div class="sec">
     <div class="sh"><div class="si">📸</div><span class="st">⑥ 施工前・施工後の写真（日付入り写真台紙）</span></div>
     <div class="sb">
-      <p class="note">写真を選ぶと、撮影日（写真の情報から自動、無ければファイル日付）と箇所を付けて台紙に並べます。<b>写真は案件保存の対象外</b>です（データが大きすぎるため）。台紙は印刷またはPDF保存してください。</p>
+      <p class="note">写真を選ぶと、撮影日（写真の情報から自動、無ければファイル日付）と箇所を付けて台紙に並べます。施工前の写真には「✏️ 手すりを描き込む」で取付予定の手すりを入れられます（写真にテープやペンで目印があればAIが自動で入れます）。<b>写真は案件保存の対象外</b>です（データが大きすぎるため）。台紙は印刷またはPDF保存してください。</p>
       <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
         <label class="btn">📷 施工前の写真<input type="file" accept="image/*" multiple style="display:none;" onchange="addPhotos(event,'施工前')"></label>
         <label class="btn">📷 施工後の写真<input type="file" accept="image/*" multiple style="display:none;" onchange="addPhotos(event,'施工後')"></label>
@@ -367,6 +367,38 @@ textarea{resize:vertical;min-height:70px;line-height:1.6;}
   <button class="btn bp" onclick="printBreakdown()">📑 工事費内訳書</button>
   <button class="btn bp" onclick="printReceipt()">🧾 領収証</button>
   <button class="btn bp" onclick="printPhotos()">📸 写真台紙</button>
+</div>
+<!-- 写真に手すりを描き込むエディタ -->
+<div id="railEditor" style="display:none;position:fixed;inset:0;background:rgba(20,30,20,.82);z-index:300;flex-direction:column;align-items:center;padding:10px;">
+  <div style="background:#fff;border-radius:12px;max-width:1100px;width:100%;display:flex;flex-direction:column;max-height:100%;overflow:hidden;">
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);">
+      <b style="font-size:14px;margin-right:6px;">✏️ 手すりを描き込む</b>
+      <span class="note">種類：</span>
+      <button class="btn sm rtool" data-k="h" onclick="setRailKind('h')">━ 横</button>
+      <button class="btn sm rtool" data-k="v" onclick="setRailKind('v')">┃ 縦</button>
+      <button class="btn sm rtool" data-k="l" onclick="setRailKind('l')">┗ L型</button>
+      <button class="btn sm rtool" data-k="free" onclick="setRailKind('free')">／ 斜め・自由</button>
+      <span class="note" style="margin-left:6px;">見た目：</span>
+      <select id="railStyle" onchange="redrawRail()" style="font-size:12px;padding:5px 6px;"><option value="rail">手すり（木目色）</option><option value="red">赤線（計画線）</option></select>
+      <span class="note" style="margin-left:6px;">番号・名前：</span>
+      <select id="railLabel" style="font-size:12px;padding:5px 6px;max-width:220px;"></select>
+      <input id="railLabelFree" placeholder="自由入力（例：縦手すり L=600）" style="font-size:12px;padding:5px 8px;width:180px;">
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border-light);background:#fafbf7;">
+      <button class="btn sm bp" onclick="aiDetectRails()">🤖 写真のマーキングから自動で入れる</button>
+      <button class="btn sm" onclick="railUndo()">↩ 1つ戻す</button>
+      <button class="btn sm" onclick="railDeleteSelected()">🗑 選んだ手すりを消す</button>
+      <button class="btn sm" onclick="if(confirm('描いた手すりを全部消しますか？')){railAnns=[];railSel=-1;redrawRail();}">全部消す</button>
+      <span id="railStatus" class="note"></span>
+    </div>
+    <div style="flex:1;overflow:auto;display:flex;justify-content:center;align-items:flex-start;padding:8px;background:#333;">
+      <canvas id="railCanvas" style="touch-action:none;max-width:100%;cursor:crosshair;background:#000;"></canvas>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;padding:10px 12px;border-top:1px solid var(--border);">
+      <span class="note">写真の上を<b>なぞる</b>と手すりが入ります（L型は縦の上端から横の端までなぞる）。端の丸をつまむと位置を直せます。手すりをタップすると選べます。</span>
+      <div style="display:flex;gap:8px;"><button class="btn" onclick="closeRailEditor(false)">キャンセル</button><button class="btn bp" onclick="closeRailEditor(true)">✅ これで決定</button></div>
+    </div>
+  </div>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -1112,7 +1144,8 @@ function renderPhotos(){
   const places = [...new Set(rows.map(r=>r.place).filter(Boolean))];
   $('photoGrid').innerHTML = photos.map((p,i) => `
     <div class="ph">
-      <img src="${p.dataUrl}">
+      <img src="${p.railUrl || p.dataUrl}">
+      <button class="btn sm" onclick="openRailEditor(${i})">✏️ 手すりを描き込む${p.rails && p.rails.length ? `（${p.rails.length}本）` : ''}</button>
       <div style="display:flex;gap:4px;">
         <select onchange="photos[${i}].kind=this.value" style="flex:1;"><option ${p.kind==='施工前'?'selected':''}>施工前</option><option ${p.kind==='施工後'?'selected':''}>施工後</option></select>
         <button class="btn sm" onclick="photos.splice(${i},1);renderPhotos()" style="color:#b33;">削除</button>
@@ -1120,6 +1153,186 @@ function renderPhotos(){
       <input list="placeList" placeholder="箇所（例：トイレ）" value="${escHtml(p.place)}" oninput="photos[${i}].place=this.value">
       <input type="date" value="${escHtml(p.date)}" onchange="photos[${i}].date=this.value">
     </div>`).join('');
+}
+
+
+// ============================================================
+// 写真に手すりを描き込む（手入力 ＋ AIでマーキングから自動）
+// 座標は写真に対する割合（0〜1）で持つので、表示サイズが変わってもずれない
+// ============================================================
+let railIdx = -1, railAnns = [], railSel = -1, railKind = 'h', railImg = null, railDrag = null;
+function railLabelOptions_(){
+  const opts = rows.map((r,i) => (r.type !== 'x' && r.name) ? `${figNo(i)}${r.place ? r.place + '　' : ''}${r.name.replace(/^手すり取付け/,'手すり').replace(/（対象外）/,'')}` : null).filter(Boolean);
+  return ['（番号なし）', ...opts];
+}
+function openRailEditor(i){
+  railIdx = i; const p = photos[i];
+  railAnns = JSON.parse(JSON.stringify(p.rails || [])); railSel = -1;
+  $('railStyle').value = p.railStyle || 'rail';
+  $('railLabel').innerHTML = railLabelOptions_().map(o => `<option>${escHtml(o)}</option>`).join('');
+  $('railLabelFree').value = ''; $('railStatus').textContent = '';
+  railImg = new Image();
+  railImg.onload = () => {
+    const c = $('railCanvas'); c.width = railImg.naturalWidth; c.height = railImg.naturalHeight;
+    $('railEditor').style.display = 'flex'; setRailKind(railKind); redrawRail();
+  };
+  railImg.src = p.dataUrl;
+}
+function setRailKind(k){ railKind = k; document.querySelectorAll('.rtool').forEach(b => b.classList.toggle('bp', b.dataset.k === k)); }
+function currentRailLabel_(){
+  const free = g('railLabelFree'); if (free) return free;
+  const v = $('railLabel').value; return v === '（番号なし）' ? '' : v;
+}
+// 手すりの描画（写真の上に重ねる）。印刷用の合成にも同じ関数を使う
+function drawRails(ctx, w, h, anns, style, selIdx){
+  const base = Math.max(w, h);
+  anns.forEach((a, ai) => {
+    const pts = a.pts.map(([x,y]) => [x*w, y*h]);
+    if (pts.length < 2) return;
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const path = () => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); };
+    if (style === 'red'){
+      ctx.strokeStyle = '#e60012'; ctx.lineWidth = base*0.007; path(); ctx.stroke();
+    } else {
+      ctx.strokeStyle = 'rgba(60,35,15,.95)'; ctx.lineWidth = base*0.016; path(); ctx.stroke();
+      ctx.strokeStyle = '#c8894a'; ctx.lineWidth = base*0.011; path(); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,235,200,.55)'; ctx.lineWidth = base*0.003; path(); ctx.stroke();
+      // 受け金具（端と角）
+      pts.forEach(p => { ctx.beginPath(); ctx.arc(p[0], p[1], base*0.009, 0, Math.PI*2); ctx.fillStyle = '#9aa0a6'; ctx.fill(); ctx.lineWidth = base*0.002; ctx.strokeStyle = '#444'; ctx.stroke(); });
+    }
+    if (ai === selIdx){ ctx.setLineDash([base*0.01, base*0.008]); ctx.strokeStyle = '#00a2ff'; ctx.lineWidth = base*0.004; path(); ctx.stroke(); ctx.setLineDash([]); }
+    // 番号・名前のラベル
+    if (a.label){
+      const fs = Math.round(base*0.028); ctx.font = `bold ${fs}px "Noto Sans JP", sans-serif`;
+      const tw = ctx.measureText(a.label).width;
+      let lx = Math.min(...pts.map(p=>p[0])), ly = Math.min(...pts.map(p=>p[1])) - fs*0.9;
+      if (ly < fs*1.2) ly = Math.max(...pts.map(p=>p[1])) + fs*1.6;
+      lx = Math.max(4, Math.min(w - tw - 16, lx));
+      ctx.fillStyle = 'rgba(255,255,255,.88)'; ctx.fillRect(lx - 6, ly - fs*1.05, tw + 12, fs*1.35);
+      ctx.fillStyle = style === 'red' ? '#e60012' : '#5a3412'; ctx.fillText(a.label, lx, ly);
+    }
+    ctx.restore();
+  });
+}
+function redrawRail(preview){
+  const c = $('railCanvas'), ctx = c.getContext('2d');
+  ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(railImg, 0, 0);
+  drawRails(ctx, c.width, c.height, preview ? railAnns.concat([preview]) : railAnns, g('railStyle'), railSel);
+  // 端点のつまみ（編集用。印刷には出ない）
+  const base = Math.max(c.width, c.height);
+  railAnns.forEach(a => a.pts.forEach(([x,y]) => { ctx.beginPath(); ctx.arc(x*c.width, y*c.height, base*0.012, 0, Math.PI*2); ctx.strokeStyle = '#00a2ff'; ctx.lineWidth = base*0.003; ctx.stroke(); }));
+}
+function railPos_(e){
+  const c = $('railCanvas'), r = c.getBoundingClientRect();
+  return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))];
+}
+function railShape_(a, b){
+  const [x1,y1] = a, [x2,y2] = b;
+  if (railKind === 'h') return [[x1,y1],[x2,y1]];
+  if (railKind === 'v') return [[x1,y1],[x1,y2]];
+  if (railKind === 'l') return [[x1,y1],[x1,y2],[x2,y2]];
+  return [[x1,y1],[x2,y2]];
+}
+function railHit_(p){
+  const c = $('railCanvas'); const ar = c.width / c.height; const tol = 0.025;
+  for (let ai = railAnns.length-1; ai >= 0; ai--){
+    const pts = railAnns[ai].pts;
+    for (let k = 0; k < pts.length; k++){ if (Math.hypot((pts[k][0]-p[0])*ar, pts[k][1]-p[1]) < tol) return {ai, k}; }
+  }
+  for (let ai = railAnns.length-1; ai >= 0; ai--){
+    const pts = railAnns[ai].pts;
+    for (let k = 0; k < pts.length-1; k++){
+      const [ax,ay] = pts[k], [bx,by] = pts[k+1];
+      const dx = (bx-ax)*ar, dy = by-ay, L = dx*dx+dy*dy || 1;
+      const t = Math.max(0, Math.min(1, (((p[0]-ax)*ar)*dx + (p[1]-ay)*dy) / L));
+      if (Math.hypot((p[0]-ax)*ar - t*dx, p[1]-ay - t*dy) < tol*0.8) return {ai, k:-1};
+    }
+  }
+  return null;
+}
+function initRailCanvas(){
+  const c = $('railCanvas');
+  c.addEventListener('pointerdown', e => {
+    c.setPointerCapture(e.pointerId);
+    const p = railPos_(e), hit = railHit_(p);
+    if (hit && hit.k >= 0){ railSel = hit.ai; railDrag = {mode:'move', ai:hit.ai, k:hit.k}; }
+    else if (hit){ railSel = hit.ai; railDrag = null; redrawRail(); }
+    else { railSel = -1; railDrag = {mode:'draw', start:p, end:p}; }
+  });
+  c.addEventListener('pointermove', e => {
+    if (!railDrag) return;
+    const p = railPos_(e);
+    if (railDrag.mode === 'move'){
+      const a = railAnns[railDrag.ai], k = railDrag.k;
+      // 横・縦の手すりは向きを保ったまま端を動かす
+      if (a.kind === 'h'){ a.pts[k][0] = p[0]; a.pts.forEach(q => q[1] = p[1]); }
+      else if (a.kind === 'v'){ a.pts[k][1] = p[1]; a.pts.forEach(q => q[0] = p[0]); }
+      else if (a.kind === 'l'){
+        if (k === 0){ a.pts[0] = [a.pts[1][0], p[1]]; }
+        else if (k === 2){ a.pts[2] = [p[0], a.pts[1][1]]; }
+        else { a.pts[1] = p; a.pts[0][0] = p[0]; a.pts[2][1] = p[1]; }
+      } else a.pts[k] = p;
+      redrawRail();
+    } else { railDrag.end = p; redrawRail({kind:railKind, pts:railShape_(railDrag.start, p), label:''}); }
+  });
+  c.addEventListener('pointerup', e => {
+    if (railDrag && railDrag.mode === 'draw'){
+      const [x1,y1] = railDrag.start, [x2,y2] = railDrag.end;
+      if (Math.hypot(x2-x1, y2-y1) > 0.03){
+        railAnns.push({kind:railKind, pts:railShape_(railDrag.start, railDrag.end), label: currentRailLabel_()});
+        railSel = railAnns.length - 1;
+        advanceRailLabel_();
+      }
+    }
+    railDrag = null; redrawRail();
+  });
+}
+// 1本描いたら番号の選択を次へ進める（①→②…と続けて描けるように）
+function advanceRailLabel_(){
+  const s = $('railLabel'); if (!g('railLabelFree') && s.selectedIndex > 0 && s.selectedIndex < s.options.length - 1) s.selectedIndex++;
+}
+function railUndo(){ railAnns.pop(); railSel = -1; redrawRail(); }
+function railDeleteSelected(){ if (railSel < 0){ toast('消したい手すりをタップして選んでください', false); return; } railAnns.splice(railSel,1); railSel = -1; redrawRail(); }
+function closeRailEditor(save){
+  if (save){
+    const p = photos[railIdx];
+    p.rails = railAnns; p.railStyle = g('railStyle');
+    if (railAnns.length){
+      const c = document.createElement('canvas'); c.width = railImg.naturalWidth; c.height = railImg.naturalHeight;
+      const ctx = c.getContext('2d'); ctx.drawImage(railImg, 0, 0); drawRails(ctx, c.width, c.height, railAnns, p.railStyle, -1);
+      p.railUrl = c.toDataURL('image/jpeg', 0.88);
+    } else p.railUrl = '';
+    renderPhotos();
+  }
+  $('railEditor').style.display = 'none';
+}
+// AI：写真の中のマーキング（テープ・ペンの線・赤い印など）から手すりの位置を読み取る
+async function aiDetectRails(){
+  const st = $('railStatus'); st.textContent = '写真のマーキングを探しています…（10〜20秒）'; st.style.color = 'var(--muted)';
+  try{
+    const p = photos[railIdx];
+    const b64 = p.dataUrl.split(',')[1];
+    const prompt = `住宅改修（手すり取付け）の現場写真です。手すりを付ける位置の目印（マスキングテープ、ペンやマーカーの線、写真に描き込まれた赤い線、付箋・シールなど）を探し、それぞれを手すりとして座標で返してください。
+JSONのみを出力：{"rails":[{"kind":"h|v|l|free","pts":[[x,y],[x,y]],"note":"縦手すり など短く"}],"comment":"見つからない場合はその理由"}
+- 座標は写真の左上を(0,0)、右下を(1000,1000)とした整数
+- kind: h=横（水平）、v=縦（垂直）、l=L型（pts は縦の上端→角→横の端 の3点）、free=斜め
+- 目印の端から端までを結ぶ。目印が見つからなければ rails は空配列にし、位置を推測で作らないこと`;
+    const text = await callClaudeAPI([{type:'image', source:{type:'base64', media_type:'image/jpeg', data:b64}}, {type:'text', text:prompt}], 2000);
+    const d = parseAiJson(text);
+    const found = (d.rails || []).filter(r => Array.isArray(r.pts) && r.pts.length >= 2);
+    if (!found.length){ st.textContent = 'マーキングが見つかりませんでした' + (d.comment ? `（${d.comment}）` : '') + '。写真をなぞって手で入れてください。'; st.style.color = 'var(--error)'; return; }
+    const labels = railLabelOptions_().slice(1);
+    found.forEach(r => {
+      let pts = r.pts.map(([x,y]) => [Math.min(1,Math.max(0,x/1000)), Math.min(1,Math.max(0,y/1000))]);
+      const kind = ['h','v','l','free'].includes(r.kind) ? r.kind : 'free';
+      if (kind === 'h'){ const y = (pts[0][1] + pts[pts.length-1][1]) / 2; pts = [[pts[0][0], y], [pts[pts.length-1][0], y]]; }
+      if (kind === 'v'){ const x = (pts[0][0] + pts[pts.length-1][0]) / 2; pts = [[x, pts[0][1]], [x, pts[pts.length-1][1]]]; }
+      railAnns.push({kind, pts, label: currentRailLabel_() || r.note || ''});
+      advanceRailLabel_();
+    });
+    railSel = -1; redrawRail();
+    st.textContent = `${found.length}本の手すりを入れました。位置がずれていれば端の丸をつまんで直してください。`; st.style.color = 'var(--success)';
+  }catch(e){ st.textContent = '読み取りに失敗しました：' + e.message; st.style.color = 'var(--error)'; }
 }
 
 // ============================================================
@@ -1444,7 +1657,7 @@ function buildPhotoHtml(){
   for (let i=0; i<sorted.length; i+=per) pages.push(sorted.slice(i, i+per));
   return pages.map((pg, pi) => `<div class="page">
     <div class="hd"><b>住宅改修 施工写真</b><span>被保険者：${escHtml(g('name'))}　様　／　施工：${escHtml(g('contractor'))}　（${pi+1}/${pages.length}）</span></div>
-    <div class="pg">${pg.map(p => `<div class="cell"><div class="im"><img src="${p.dataUrl}"><div class="stamp">${escHtml((p.date||'').replace(/-/g,'/'))}</div></div><div class="cap"><span class="k ${p.kind==='施工後'?'after':''}">${p.kind}</span>${escHtml(p.place||'')}<span class="d">撮影日 ${escHtml(dateJa(p.date,'wareki'))}</span></div></div>`).join('')}</div>
+    <div class="pg">${pg.map(p => `<div class="cell"><div class="im"><img src="${p.railUrl || p.dataUrl}"><div class="stamp">${escHtml((p.date||'').replace(/-/g,'/'))}</div></div><div class="cap"><span class="k ${p.kind==='施工後'?'after':''}">${p.kind}${p.kind==='施工前' && p.rails && p.rails.length ? '（取付予定）' : ''}</span>${escHtml(p.place||'')}<span class="d">撮影日 ${escHtml(dateJa(p.date,'wareki'))}</span></div></div>`).join('')}</div>
   </div>`).join('');
 }
 const PHOTO_CSS = `
@@ -1596,7 +1809,7 @@ function clearForm(){
 function init(){
   const dl = document.createElement('datalist'); dl.id = 'placeList';
   dl.innerHTML = PLACES.map(p=>`<option value="${p}">`).join(''); document.body.appendChild(dl);
-  loadSettingsUI(); renderPresetChips(); renderReasonForm(); renderRows(); recalc();
+  loadSettingsUI(); initRailCanvas(); renderPresetChips(); renderReasonForm(); renderRows(); recalc();
   $('applyDate').value = todayStr();
 }
 init();
