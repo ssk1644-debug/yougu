@@ -289,7 +289,7 @@ textarea{resize:vertical;min-height:70px;line-height:1.6;}
   <div class="sec">
     <div class="sh"><div class="si">💬</div><span class="st">⑤ 住宅改修が必要な理由書（福山市様式（1）（2））</span></div>
     <div class="sb">
-      <p class="note">②の身体状況と③の工事内訳から、AIが理由書の下書きを作ります。「〜なので必要」だけにならないよう、<b>身体状況→困っている動作→改修の方針</b>の順で書きます。下書きは必ず確認・修正してから印刷してください。</p>
+      <p class="note">②の身体状況と③の工事内訳から、AIが理由書の下書きを作ります。「〜なので必要」だけにならないよう、<b>身体状況→困っている動作→改修の方針</b>の順で書きます。下書きは必ず確認・修正してから印刷してください。<br>案件管理を使っている場合、進捗を「事前申請済み」以降に進めた案件の理由書（＝仕上がったもの）から、同じような工事の例を最大3件、氏名・住所・日付を伏せて見本に使います。使うほどアスポートの書き方に近づきます。</p>
       <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;">
         <button class="btn bp" onclick="aiReason()">🤖 AIで理由書を下書き</button>
         <button class="btn" onclick="fillReason4FromRows(true)">④ 改修項目を内訳から作り直す</button>
@@ -823,13 +823,71 @@ function fillReason4FromRows(force){
   if (force) toast('④を内訳から作り直しました');
 }
 const PLACE_BLOCK = {"トイレ":"haisetsu","浴室":"nyuyoku","脱衣所":"nyuyoku","玄関":"gaishutsu","屋外・アプローチ":"gaishutsu","勝手口":"gaishutsu"};
+// ---- 過去に仕上げた理由書を、次の下書きの見本として使う ----
+// 案件一覧から「同じような工事」で、入力中より先に進んだ（＝理由書が仕上がった）案件を選び、
+// 氏名・住所・日付・電話などを伏せてAIに渡す。案件管理が未設定なら何もしない
+function maskPersonal_(text, f){
+  let t = String(text || '');
+  const words = [f.name, f.kana, f.addr, f.aName, f.aAddr, f.cmName, f.cmOffice, f.rAuthor, f.phone]
+    .concat(String(f.name||'').split(/[\s　]+/), String(f.kana||'').split(/[\s　]+/))
+    .filter(w => w && String(w).trim().length >= 2);
+  words.sort((a,b) => b.length - a.length).forEach(w => { t = t.split(w).join('〇〇'); });
+  return t
+    .replace(/(明治|大正|昭和|平成|令和)?\s*\d{1,4}\s*年\s*\d{1,2}\s*月(\s*\d{1,2}\s*日)?/g, '〇年〇月')
+    .replace(/\d{4}[\/\-]\d{1,2}([\/\-]\d{1,2})?/g, '〇年〇月')
+    .replace(/0\d{1,4}-\d{1,4}-\d{3,4}/g, '〇〇〇');
+}
+function workKeys_(rs){
+  return new Set((rs || []).filter(r => r && r.name && r.type !== 'x').flatMap(r => [`${r.type}|${r.place||''}`, `p|${r.place||''}`, `t|${r.type}`]));
+}
+async function loadReasonExamples_(){
+  if (!getGasUrl()) return [];
+  try{
+    const list = (await gasFetch('list')).cases || [];
+    const curPlaces = [...new Set(rows.map(r => r.place).filter(Boolean))];
+    const curNames = rows.filter(r => r.name).map(r => r.name.replace(/（.*?）/g,''));
+    const cands = list
+      .filter(c => c.caseId !== currentCaseId && c.status && c.status !== '入力中')
+      .map(c => ({c, score: curPlaces.filter(p => String(c.workSummary||'').includes(p)).length * 2 + curNames.filter(n => String(c.workSummary||'').includes(n)).length}))
+      .sort((a,b) => b.score - a.score || String(b.c.updatedAt||'').localeCompare(String(a.c.updatedAt||'')))
+      .slice(0, 6);
+    const cur = workKeys_(rows);
+    const got = await Promise.all(cands.map(x => gasFetch('get', {caseId: x.c.caseId}).then(d => d.case).catch(() => null)));
+    const ex = [];
+    got.forEach(cs => {
+      if (!cs) return;
+      let f; try{ f = JSON.parse(cs.formData || '{}'); }catch(e){ return; }
+      const blocks = REASON_BLOCKS.filter(b => f[`rb_${b.key}_diff`] || f[`rb_${b.key}_policy`]);
+      if (!blocks.length && !f.rBody) return;
+      const keys = workKeys_(f.__rows);
+      const score = [...cur].filter(k => keys.has(k)).length;
+      const work = (f.__rows || []).filter(r => r.name && r.type !== 'x').map(r => `${r.place||''}：${r.name}`).join('、');
+      const parts = [`工事：${work}`];
+      if (f.rBody) parts.push(`身体状況：${f.rBody}`);
+      if (f.rWish) parts.push(`どう変えたいか：${f.rWish}`);
+      blocks.forEach(b => {
+        if (f[`rb_${b.key}_diff`]) parts.push(`${b.label}②：${f[`rb_${b.key}_diff`]}`);
+        if (f[`rb_${b.key}_policy`]) parts.push(`${b.label}方針：${f[`rb_${b.key}_policy`]}`);
+      });
+      ex.push({score, text: maskPersonal_(parts.join('\n'), f).slice(0, 1200)});
+    });
+    return ex.sort((a,b) => b.score - a.score).slice(0, 3).map(e => e.text);
+  }catch(e){ console.warn('過去の理由書を読み込めませんでした', e); return []; }
+}
+
 async function aiReason(){
   const st = $('reasonStatus');
   const work = rows.filter(r=>r.type!=='x' && r.name);
   if (!work.length){ st.textContent = '先に③で工事内容を入れてください。'; st.style.color = 'var(--error)'; return; }
   if (!g('condition')){ st.textContent = '②の「身体状況・疾患」が空です。身体状況が無いと理由書として通りにくいので先に入れてください。'; st.style.color = 'var(--error)'; return; }
-  st.textContent = '下書きを作成中…（20秒ほどかかります）'; st.style.color = 'var(--muted)';
+  st.textContent = getGasUrl() ? '過去の理由書から見本を探しています…' : '下書きを作成中…（20秒ほどかかります）'; st.style.color = 'var(--muted)';
   try{
+    const examples = await loadReasonExamples_();
+    st.textContent = `下書きを作成中…（20〜40秒ほどかかります）${examples.length ? `／過去の理由書${examples.length}件を見本にしています` : ''}`;
+    const exampleText = examples.length ? `
+【アスポートで最近仕上げた理由書（同じような工事の実例。書き方・言い回しを最優先で参考にすること。内容・身体状況はまねしない）】
+${examples.map((t,i) => `--- 実例${i+1} ---\n${t}`).join('\n')}
+` : '';
     const list = rows.map((r,i) => (r.type!=='x' && r.name) ? `・${figNo(i) ? '図' + figNo(i) + '　' : ''}${r.place||'（箇所未記入）'}：${r.name}（区分${r.type}：${TYPE_LABELS[r.type]}）` : null).filter(Boolean).join('\n');
     const blockDef = REASON_BLOCKS.map(b => `  "${b.key}"（${b.label}）: 生活動作の番号 ${b.free ? '（この活動は番号なし。free_acts に動作を文章で書く）' : b.acts.map((a,i)=>`${i}=${a}`).join('／')}`).join('\n');
     const prompt = `介護保険の住宅改修（福山市）の「住宅改修が必要な理由書」の下書きを作ってください。作成者は施工業者（福祉用具事業所）で、担当ケアマネが確認します。
@@ -840,6 +898,7 @@ ${g('condition')}
 【予定している工事】
 ${list}
 
+${exampleText}
 【アスポートの記入例（書き方・文体の見本。内容はまねしないこと）】
 身体状況の例：「脳梗塞を発症し入院。歩行時は一本杖使用し自立だが長期入院による筋力低下もあり歩行動作など不安定で転倒リスクが高い。退院前の家屋訪問にて段差昇降及び立ち座り動作時にフラツキがみられた。」
 介護状況の例：「息子家族と同居。2階に自室兼寝室があり主にその部屋で日中は過ごしている。福祉用具では、安全に階段昇降やベッドからの立ち座りが行えるように手すりを貸与。浴槽出入り用で入浴グリップを購入。」
@@ -895,7 +954,7 @@ ${blockDef}
       $(`rb_${b.key}_policy`).value = x.policy || '';
     });
     fillReason4FromRows(false);
-    st.textContent = '下書きを作りました。必ず内容を確認・修正してください。'; st.style.color = 'var(--success)';
+    st.textContent = `下書きを作りました${examples.length ? `（過去の理由書${examples.length}件を見本に使用）` : ''}。必ず内容を確認・修正してください。`; st.style.color = 'var(--success)';
     checkReason();
   }catch(e){ st.textContent = '作成に失敗しました：' + e.message; st.style.color = 'var(--error)'; }
 }
