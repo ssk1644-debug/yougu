@@ -163,7 +163,7 @@ textarea{resize:vertical;min-height:68px;line-height:1.6;}
     <div>
       <h1>介護保険 福祉用具購入費支給申請書</h1>
       <p>受領委任払い用 ／ 自動入力フォーム（福山市）</p>
-      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-11-24-5　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
+      <p style="font-size:10px;opacity:.55;margin-top:2px;">ver 2026-11-24-7　※不具合報告時はこの日付もお知らせください（キャッシュで古い版を見ている場合があります／Ctrl+Shift+Rで強制再読み込み）</p>
     </div>
   </div>
   <div class="hl" style="gap:8px;">
@@ -879,7 +879,7 @@ function getApiModel(){ return localStorage.getItem(API_MODEL_STORAGE) || "claud
 // 追跡できるようにするための仕組み。案件一覧のシート列を増やさずに済むよう、
 // serializeFormState()が返すformData（1つのJSONとして保存される）に含める形にしている）
 // ============================================================
-const APP_VERSION = "2026-11-24-5";
+const APP_VERSION = "2026-11-24-7";
 const DEVICE_LABEL_STORAGE = "asport_shinsei_device_label";
 function getDeviceLabel(){
   let label = localStorage.getItem(DEVICE_LABEL_STORAGE);
@@ -4868,7 +4868,9 @@ function generateSeihoDocs(){
   if (seihoDateBlank){ aY = 0; aM = 0; aD = 0; }
   const dateStr = seihoDateBlank ? SEIHO_BLANK_DATE : eraDateStr_(aY, aM, aD);
   const birthStr = eraDateStr_(by, bm, bd);
-  const age = seihoDateBlank ? '' : calcAge_(by, bm, bd, aY, aM, aD);
+  const age = seihoDateBlank
+    ? calcAge_(by, bm, bd, today.getFullYear(), today.getMonth()+1, today.getDate()) // 申請日は空欄でも年齢は本日時点で自動計算して入れる
+    : calcAge_(by, bm, bd, aY, aM, aD);
   const setainushi = g('seihoSetainushi') || appName;
   const caseNo = g('seihoCaseNo');
   // 担当CW（ケースワーカー）名は福祉事務所側で記入するため、常に空欄で出力する
